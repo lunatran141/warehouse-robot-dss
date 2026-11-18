@@ -1,0 +1,15 @@
+services:
+  netlogo:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        NETLOGO_VERSION: "7.0.4"
+        NETLOGO_ARCH: "64"
+        NETLOGO_SHA256: "75636b8469ea4995ec051cfbc91e525f171be84b8f959b86bc080fbff702dfbc"
+    image: warehouse-robot-dss:dev
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    stdin_open: true
+    tty: true

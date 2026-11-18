@@ -1,0 +1,26 @@
+# Git files
+.git
+.gitignore
+
+# GitHub configuration
+.github
+
+# Local editor settings
+.vscode
+
+# Experiment outputs
+experiments/results/*
+!experiments/results/.gitkeep
+
+# Temporary files
+*.log
+*.tmp
+*.nlogo~
+*.nls~
+
+# Environment and secrets
+.env
+.env.*
+
+# Documentation is not required inside the runtime image
+docs

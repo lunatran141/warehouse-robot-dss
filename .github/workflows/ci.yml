@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-smoke-test:
+    name: Docker smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate project structure
+        shell: bash
+        run: |
+          test -f README.md
+          test -f CONTRIBUTING.md
+          test -f .gitignore
+          test -f .dockerignore
+          test -f docker-compose.yml
+          test -f docker/Dockerfile
+          test -d model/src
+          test -d experiments
+          test -d scripts
+          test -d docs
+          echo "Project structure is valid"
+
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          load: true
+          tags: warehouse-robot-dss:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify Java and NetLogo
+        shell: bash
+        run: |
+          docker run --rm warehouse-robot-dss:ci \
+            bash -lc 'java -version && test -x "$NETLOGO_HOME/netlogo-headless.sh"'
+          NETLOGO_VERSION_OUTPUT="$(docker run --rm warehouse-robot-dss:ci \
+            bash -lc '"$NETLOGO_HOME/netlogo-headless.sh" --version')"
+          echo "$NETLOGO_VERSION_OUTPUT"
+          echo "$NETLOGO_VERSION_OUTPUT" | grep -F "NetLogo 7.0.4"
+          echo "Docker smoke test passed"

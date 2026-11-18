@@ -1,0 +1,30 @@
+# NetLogo temporary and backup files
+*.nlogo~
+*.nls~
+*.tmp
+*.log
+
+# Experiment results
+experiments/results/*
+!experiments/results/.gitkeep
+
+# VS Code local settings
+.vscode/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Docker temporary files
+docker-data/
+
+# Archives
+*.zip
+*.tar
+*.gz
