@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<experiments>
+  <experiment name="smoke-test" repetitions="1" sequentialRunOrder="true" version="NetLogo 7.0.4" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <exitCondition><![CDATA[ticks >= 10]]></exitCondition>
+    <metrics>
+      <metric>ticks</metric>
+      <metric>model-status</metric>
+    </metrics>
+  </experiment>
+</experiments>
