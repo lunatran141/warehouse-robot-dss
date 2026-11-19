@@ -121,78 +121,76 @@ Môi trường kho bao gồm:
 - Khu vực tắc nghẽn.
 - Khu vực chờ của robot.
 
-## 6. Các chiến lược dự kiến
+## 6. Các chiến lược phân phối
 
-### Chiến lược gần nhất
+Hệ thống triển khai và so sánh ba chiến lược phân phối đơn hàng chính thức.
+
+### 6.1. Nearest — Robot gần nhất
 
 Phân công đơn hàng cho robot có khoảng cách đến điểm lấy hàng ngắn nhất.
 
 Ưu điểm:
 
-- Dễ xây dựng và dễ giải thích.
+- Đơn giản, dễ xây dựng và dễ giải thích.
 - Có thể giảm thời gian robot đến điểm lấy hàng.
 
 Hạn chế:
 
-- Chưa xem xét đầy đủ mức pin.
+- Chưa xem xét đầy đủ mức pin và tải công việc.
 - Có thể dồn nhiều robot vào cùng một khu vực.
 - Không bảo đảm cân bằng tải.
 
-### Chiến lược ưu tiên pin
+### 6.2. Least workload — Robot có tải thấp nhất
 
-Ưu tiên robot có đủ năng lượng để hoàn thành nhiệm vụ an toàn.
+Phân công đơn hàng cho robot có khối lượng công việc hiện tại thấp nhất.
 
 Ưu điểm:
 
-- Giảm nguy cơ robot hết pin giữa đường.
-- Tăng độ ổn định khi vận hành.
+- Hạn chế tình trạng một robot xử lý quá nhiều nhiệm vụ.
+- Phân phối công việc đồng đều hơn giữa các robot.
 
 Hạn chế:
 
-- Có thể chọn robot ở xa.
-- Có thể làm tăng thời gian xử lý đơn hàng.
+- Robot được chọn có thể không phải robot gần nhất.
+- Cần theo dõi trạng thái công việc của toàn bộ đội robot.
 
-### Chiến lược cân bằng tải
+### 6.3. Multi-criteria — Chiến lược đa tiêu chí
 
-Phân phối nhiệm vụ dựa trên khối lượng công việc hiện tại của robot.
+Chấm điểm các robot dựa trên nhiều tiêu chí:
 
-Ưu điểm:
+- Khoảng cách đến điểm lấy hàng.
+- Mức pin hiện tại.
+- Khối lượng công việc.
+- Độ ưu tiên của đơn hàng.
+- Mức độ tắc nghẽn trên tuyến đường.
 
-- Giảm tình trạng một robot phải xử lý quá nhiều nhiệm vụ.
-- Phân phối công việc đồng đều hơn.
+Robot có điểm phù hợp nhất sẽ được đề xuất nhận nhiệm vụ.
 
-Hạn chế:
+Công thức tổng quát:
 
-- Có thể không chọn robot gần nhất.
-- Cần theo dõi trạng thái của toàn bộ đội robot.
+```text
+score =
+  w_distance × distance_score
++ w_battery × battery_score
++ w_workload × workload_score
++ w_priority × priority_score
++ w_congestion × congestion_score
+```
 
-### Chiến lược tránh tắc nghẽn
-
-Ưu tiên tuyến đường và robot ít chịu ảnh hưởng bởi khu vực đông đúc.
-
-Ưu điểm:
-
-- Giảm thời gian chờ do xung đột.
-- Có thể cải thiện thông lượng của toàn kho.
-
-Hạn chế:
-
-- Tuyến đường được chọn có thể dài hơn.
-- Việc đánh giá mức độ tắc nghẽn phức tạp hơn.
-
-### Chiến lược tổng hợp
-
-Kết hợp khoảng cách, mức pin, tải công việc, độ ưu tiên của đơn hàng và mức độ tắc nghẽn.
+Trong đó, các trọng số được điều chỉnh theo mục tiêu của người quản lý.
 
 Ưu điểm:
 
-- Xem xét đồng thời nhiều yếu tố.
+- Xem xét đồng thời nhiều yếu tố vận hành.
+- Có thể thích nghi với các mục tiêu quản lý khác nhau.
 - Phù hợp với vai trò hỗ trợ ra quyết định.
 
 Hạn chế:
 
-- Cần lựa chọn trọng số hợp lý.
-- Kết quả phụ thuộc vào mục tiêu của người quản lý.
+- Cần lựa chọn và giải thích trọng số hợp lý.
+- Kết quả phụ thuộc vào cách chuẩn hóa các tiêu chí.
+
+Mức pin và mức độ tắc nghẽn là tiêu chí đầu vào của chiến lược `Multi-criteria`, không được triển khai thành hai chiến lược phân phối độc lập.
 
 ## 7. Các kịch bản thử nghiệm dự kiến
 
@@ -442,20 +440,40 @@ Không thành viên nào làm việc trực tiếp trên nhánh main sau khi h�
 
 ## 17. Quy tắc đặt tên nhánh
 
+Tên nhánh sử dụng mã nhiệm vụ trong bảng kế hoạch, không sử dụng mã thành viên.
+
+Cấu trúc:
+
 ```text
-feature/tv1-ten-task
-feature/tv2-ten-task
-feature/tv3-ten-task
-feature/tv4-ten-task
-feature/tv5-ten-task
+<loai>/<ma-task>-<mo-ta-ngan>
+```
+
+Các loại nhánh thường dùng:
+
+```text
+feature/t01-ten-task
+fix/t02-ten-loi
+docs/t03-ten-tai-lieu
+chore/t04-ten-cong-viec
 ```
 
 Ví dụ:
 
 ```text
-feature/tv2-robot-battery
-feature/tv5-decision-engine
+chore/t01-bootstrap-vscode-docker
+feature/t02-robot-battery
+feature/t03-basic-strategies
+feature/t04-routing-congestion
+feature/t05-decision-engine
 ```
+
+Quy tắc:
+
+- Mã nhiệm vụ viết thường khi đặt tên nhánh: `t01`, `t02`, `t03`.
+- Dùng dấu gạch ngang để phân cách các từ.
+- Không dùng dấu tiếng Việt, khoảng trắng hoặc tên cá nhân.
+- Mỗi nhánh chỉ nên xử lý một nhiệm vụ chính.
+- Tiêu đề Pull Request phải ghi mã nhiệm vụ, ví dụ: `T02: Implement robot battery model`.
 
 ## 18. Kịch bản demo dự kiến
 
