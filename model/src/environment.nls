@@ -1,0 +1,115 @@
+;; ============================================================
+;; MODULE: ENVIRONMENT
+;; Vai trò: Xây dựng bản đồ kho và quản lý trạng thái các ô.
+;; ============================================================
+
+;; Đặt trạng thái ban đầu cho toàn bộ ô trong kho.
+;; Tạm thời mọi ô đều là lối đi; các khu vực chuyên dụng
+;; như kệ hàng, điểm lấy hàng và trạm sạc sẽ được thêm sau.
+to setup-environment
+  ask patches [
+    ;; Loại mặc định của ô là lối đi.
+    set patch-type "aisle"
+
+    ;; Ô chưa bị khóa bởi bất kỳ sự cố nào.
+    set is-blocked? false
+    set blocked-until 0
+
+    ;; Ban đầu chưa có robot nên mức tắc nghẽn bằng 0.
+    set congestion-score 0
+
+    ;; Màu xám nhạt giúp nhận biết khu vực lối đi.
+    set pcolor gray + 2
+  ]
+  ;; Tạo các dãy kệ dọc ở khu vực trung tâm của kho.
+  ;; Kệ chỉ dùng để chứa hàng, robot không được di chuyển vào.
+  ask patches with [
+    member? pxcor [-10 -6 -2 2 6 10] and
+    abs pycor <= 10
+  ] [
+    set patch-type "shelf"
+    set pcolor brown
+  ]
+  ;; Tạo khu vực lấy hàng ở phía trên kho.
+  ;; Robot sẽ đến các ô này để nhận hàng của đơn mới.
+  ask patches with [
+    pycor = 14 and
+    pxcor >= -12 and pxcor <= 12
+  ] [
+    set patch-type "pickup"
+    set pcolor blue
+  ]
+  ;; Tạo khu vực đóng gói ở phía dưới kho.
+  ;; Robot giao hàng tới đây sau khi đã lấy hàng.
+  ask patches with [
+    pycor = -14 and
+    pxcor >= -12 and pxcor <= 12
+  ] [
+    set patch-type "packing"
+    set pcolor green
+  ]
+  ;; Tạo bốn trạm sạc ở cạnh phải của kho.
+  ;; Robot có pin yếu sẽ tìm trạm gần nhất để nạp năng lượng.
+  ask patches with [
+    pxcor = 14 and
+    member? pycor [-9 -3 3 9]
+  ] [
+    set patch-type "charger"
+    set pcolor yellow
+  ]
+  ;; Tạo khu vực chờ ở cạnh trái của kho.
+  ;; Robot rảnh có thể bắt đầu hoặc đứng chờ tại các ô này.
+  ask patches with [
+    pxcor = -14 and
+    member? pycor [-9 -3 3 9]
+  ] [
+    set patch-type "waiting-zone"
+    set pcolor violet
+  ]
+end
+;; Trả về các ô liền kề mà robot có thể di chuyển vào.
+;; Robot không được đi vào kệ hàng hoặc ô đang bị sự cố khóa.
+to-report accessible-neighbors
+  report neighbors4 with [
+    patch-type != "shelf" and
+    not is-blocked?
+  ]
+end
+;; Chọn ngẫu nhiên một ô lấy hàng đang hoạt động.
+;; Nếu không còn ô phù hợp, reporter tự trả về nobody.
+to-report random-pickup-patch
+  report one-of patches with [
+    patch-type = "pickup" and
+    not is-blocked?
+  ]
+end
+;; Chọn ngẫu nhiên một ô đóng gói đang hoạt động.
+;; Nếu không còn ô phù hợp, reporter tự trả về nobody.
+to-report random-packing-patch
+  report one-of patches with [
+    patch-type = "packing" and
+    not is-blocked?
+  ]
+end
+;; Tìm trạm sạc hoạt động gần robot hiện tại nhất.
+;; Reporter này được gọi trong ngữ cảnh của một robot.
+to-report nearest-charger-patch
+  ;; Ghi nhớ ô mà robot hiện đang đứng.
+  let robot-location patch-here
+
+  ;; Chỉ xét các trạm sạc không bị sự cố khóa.
+  let available-chargers patches with [
+    patch-type = "charger" and
+    not is-blocked?
+  ]
+
+  ;; Trả về nobody nếu hiện không có trạm sạc khả dụng.
+  if not any? available-chargers [
+    report nobody
+  ]
+
+  ;; Chọn trạm có khoảng cách ngắn nhất tới robot.
+  report min-one-of available-chargers [
+    distance robot-location
+  ]
+end

@@ -14,26 +14,242 @@
   "src/decision-engine.nls"
   "src/metrics.nls"
 ]
+;; ============================================================
+;; KHAI BÁO AGENT
+;; robots: các robot vận chuyển hàng trong kho.
+;; orders: các đơn hàng cần được robot xử lý.
+;; ============================================================
 
+breed [robots robot]
+breed [orders order]
 globals [
+  ;; Trạng thái hiện tại của mô hình:
+  ;; "Ready", "Running" hoặc "Done".
   model-status
+
+  ;; True khi hệ thống đang lần lượt chạy nhiều chiến lược
+  ;; để so sánh kết quả; false khi chỉ chạy một chiến lược.
+  is-comparing?
+
+  ;; Seed đang được dùng trong lượt chạy hiện tại.
+  ;; Cùng một seed giúp các chiến lược được so sánh công bằng.
+  current-run-seed
+
+  ;; Năm trọng số nội bộ của chiến lược Multi-criteria.
+  ;; Các trọng số này sẽ được chuẩn hóa trước khi chấm điểm.
+  mc-w-distance
+  mc-w-battery
+  mc-w-workload
+  mc-w-priority
+  mc-w-congestion
+  ;; ==========================================================
+  ;; BIẾN TÍCH LŨY KPI CỦA MỘT LƯỢT CHẠY
+  ;; Các biến này được đưa về 0 khi bắt đầu chạy một chiến lược.
+  ;; ==========================================================
+
+  ;; Tổng số đơn hàng đã được tạo trong lượt chạy.
+  total-orders-created
+
+  ;; Tổng số đơn hàng đã hoàn thành.
+  total-orders-completed
+
+  ;; Số đơn hoàn thành đúng hoặc sớm hơn deadline.
+  total-orders-ontime
+
+  ;; Số đơn hoàn thành trễ hoặc đã vượt deadline.
+  total-orders-late
+
+  ;; Tổng lượng pin mà toàn bộ robot đã tiêu thụ.
+  total-energy-consumed
+
+  ;; Tổng số tick robot phải ở trạng thái chờ.
+  total-wait-ticks
+
+  ;; Tổng số tick robot ở trạng thái hỏng.
+  total-broken-ticks
+
+  ;; Tổng số sự cố đã được kích hoạt trong lượt chạy.
+  total-incidents-triggered
+
+  ;; Tổng số lần đơn hàng phải phân công lại cho robot khác.
+  total-orders-reassigned
+
+  ;; Số đơn từng được phân công lại nhưng sau đó vẫn hoàn thành.
+  total-reassigned-completed
+  ;; ==========================================================
+  ;; KẾT QUẢ SO SÁNH VÀ KHUYẾN NGHỊ DSS
+  ;; Không xóa nhóm biến này giữa ba lượt chạy chiến lược,
+  ;; vì hệ thống cần giữ kết quả để so sánh và xếp hạng.
+  ;; ==========================================================
+
+  ;; Danh sách KPI thô thu được từ từng chiến lược.
+  comparison-results
+
+  ;; Danh sách KPI sau khi được chuẩn hóa về khoảng 0 đến 1.
+  normalized-results
+
+  ;; Danh sách các chiến lược đã được sắp xếp theo điểm giảm dần.
+  strategy-ranking
+
+  ;; Tên chiến lược được hệ thống đề xuất để tham khảo.
+  recommended-strategy
+
+  ;; Lý do định lượng giải thích cho chiến lược được đề xuất.
+  recommendation-reason
+
+  ;; Cảnh báo về các đánh đổi giữa những KPI hoặc chiến lược.
+  trade-off-warning
+
+  ;; Gói dữ liệu chuẩn dùng cho module tạo phần giải thích.
+  decision-summary-data
 ]
 
-to setup
-  clear-all
-  set model-status "Ready"
-  reset-ticks
-end
+;; ============================================================
+;; THUỘC TÍNH CỦA CÁC Ô TRÊN BẢN ĐỒ KHO
+;; Mỗi patch đại diện cho một ô trong lưới môi trường.
+;; ============================================================
 
-to go
-  set model-status "Running"
-  tick
-end</code>
+patches-own [
+  ;; Loại ô trong kho, ví dụ:
+  ;; "aisle", "shelf", "pickup", "packing",
+  ;; "charger" hoặc "waiting-zone".
+  patch-type
+
+  ;; Cho biết ô hiện tại có đang bị khóa bởi sự cố hay không.
+  is-blocked?
+
+  ;; Tick mà ô bị khóa sẽ tự động mở lại.
+  ;; Giá trị 0 nghĩa là ô hiện không có thời hạn khóa.
+  blocked-until
+
+  ;; Chỉ số tắc nghẽn tức thời tại ô này.
+  ;; Giá trị càng lớn thì khu vực càng đông robot.
+  congestion-score
+]
+
+;; ============================================================
+;; THUỘC TÍNH CỦA ROBOT
+;; Mỗi robot lưu trạng thái, pin, nhiệm vụ và số liệu hoạt động.
+;; ============================================================
+
+robots-own [
+  ;; Trạng thái hiện tại của robot:
+  ;; "idle", "assigned", "to-pickup", "carrying",
+  ;; "waiting", "charging" hoặc "broken".
+  robot-state
+
+  ;; Phần trăm pin hiện tại của robot, từ 0 đến 100.
+  battery
+
+  ;; Tổng lượng năng lượng robot đã sử dụng.
+  energy-used
+
+  ;; Đơn hàng robot đang phụ trách hoặc nobody nếu chưa có đơn.
+  current-order
+
+  ;; Ô đích robot đang di chuyển đến hoặc nobody nếu chưa có đích.
+  target-patch
+
+  ;; Tổng số đơn hàng robot đã hoàn thành.
+  orders-done
+
+  ;; Tổng số ô mà robot đã di chuyển.
+  distance-traveled
+
+  ;; Tổng số tick robot phải đứng chờ.
+  wait-ticks
+
+  ;; Tổng số tick robot hoạt động có ích.
+  active-ticks
+
+  ;; Tổng số lần robot đã vào trạm sạc.
+  charge-count
+
+  ;; Tick mà robot sẽ phục hồi khỏi trạng thái "broken".
+  broken-until
+
+  ;; Số tick liên tiếp robot bị kẹt.
+  ;; Routing dùng biến này để quyết định khi nào cần đổi tuyến.
+  wait-streak
+]
+
+;; ============================================================
+;; THUỘC TÍNH CỦA ĐƠN HÀNG
+;; Mỗi order lưu trạng thái, mức ưu tiên, thời hạn và robot nhận.
+;; ============================================================
+
+orders-own [
+  ;; Trạng thái xử lý của đơn hàng:
+  ;; "waiting", "assigned", "picked" hoặc "completed".
+  order-status
+
+  ;; Mức ưu tiên của đơn: "normal" hoặc "high".
+  priority
+
+  ;; Tick mà đơn hàng được tạo.
+  created-tick
+
+  ;; Tick cuối cùng đơn hàng nên được hoàn thành.
+  deadline-tick
+
+  ;; Tick đơn hàng thực sự hoàn thành.
+  ;; Giá trị -1 nghĩa là đơn chưa hoàn thành.
+  completed-tick
+
+  ;; Ô mà robot phải đến để lấy hàng.
+  pickup-patch
+
+  ;; Ô đóng gói hoặc giao hàng cuối cùng.
+  delivery-patch
+
+  ;; Robot đang phụ trách đơn hoặc nobody nếu chưa được gán.
+  assigned-robot
+
+  ;; True nếu đơn đã từng bị thu hồi và phân công lại.
+  ;; Biến này phục vụ đo KPI khả năng phục hồi.
+  was-reassigned?
+]
+
+</code>
   <widgets>
-    <view x="368" wrappingAllowedX="true" y="10" frameRate="30.0" minPycor="-16" height="434" showTickCounter="true" patchSize="13.0" fontSize="10" wrappingAllowedY="true" width="434" tickCounterLabel="ticks" maxPycor="16" updateMode="0" maxPxcor="16" minPxcor="-16"></view>
-    <button x="55" y="615" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="55" display="Setup">setup</button>
-    <button x="55" y="675" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="55" display="Go">go</button>
-    <monitor x="50" precision="17" y="520" height="60" fontSize="11" width="100" display="Model status">model-status</monitor>
+    <view x="378" wrappingAllowedX="false" y="20" frameRate="30.0" minPycor="-16" height="434" showTickCounter="true" patchSize="13.0" fontSize="10" wrappingAllowedY="false" width="434" tickCounterLabel="ticks" maxPycor="16" updateMode="0" maxPxcor="16" minPxcor="-16"></view>
+    <chooser x="540" y="465" height="60" variable="scenario-preset" current="1" width="250" display="scenario-preset">
+      <choice type="string" value="Normal"></choice>
+      <choice type="string" value="Peak"></choice>
+      <choice type="string" value="Congestion"></choice>
+      <choice type="string" value="Incidents"></choice>
+    </chooser>
+    <monitor x="380" precision="17" y="465" height="60" fontSize="11" width="100" display="Model status">model-status</monitor>
+    <button x="385" y="620" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="55" display="Go">go</button>
+    <button x="385" y="560" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="55" display="Setup">setup</button>
+    <chooser x="540" y="535" height="60" variable="active-strategy" current="0" width="250" display="active-strategy">
+      <choice type="string" value="Nearest"></choice>
+      <choice type="string" value="Least workload"></choice>
+      <choice type="string" value="Multi-criteria"></choice>
+    </chooser>
+    <chooser x="540" y="605" height="60" variable="management-goal" current="0" width="250" display="management-goal">
+      <choice type="string" value="Balanced"></choice>
+      <choice type="string" value="Fast Delivery"></choice>
+      <choice type="string" value="Minimize Late Orders"></choice>
+      <choice type="string" value="Save Energy"></choice>
+      <choice type="string" value="Load Balance"></choice>
+      <choice type="string" value="Incident Resilience"></choice>
+      <choice type="string" value="Custom"></choice>
+    </chooser>
+    <slider x="20" step="50" y="465" max="1000" width="150" display="sim-max-ticks" height="50" min="100" direction="Horizontal" default="300.0" variable="sim-max-ticks"></slider>
+    <slider x="20" step="5" y="660" max="100" width="150" display="w-ontime" height="50" min="0" direction="Horizontal" default="25.0" variable="w-ontime"></slider>
+    <slider x="20" step="5" y="595" max="100" width="150" display="w-speed" height="50" min="0" direction="Horizontal" default="20.0" variable="w-speed"></slider>
+    <slider x="20" step="1" y="530" max="9999" width="150" display="sim-seed" height="50" min="1" direction="Horizontal" default="10.0" variable="sim-seed"></slider>
+    <slider x="20" step="0.005" y="400" max="0.10" width="150" display="incident-prob" height="50" min="0" direction="Horizontal" default="0.005" variable="incident-prob"></slider>
+    <slider x="20" step="0.1" y="335" max="1" width="150" display="congestion-level" height="50" min="0" direction="Horizontal" default="0.3" variable="congestion-level"></slider>
+    <slider x="20" step="0.5" y="270" max="10" width="150" display="charge-rate" height="50" min="1" direction="Horizontal" default="4.0" variable="charge-rate"></slider>
+    <slider x="20" step="5" y="205" max="100" width="150" display="initial-battery" height="50" min="30" direction="Horizontal" default="100.0" variable="initial-battery"></slider>
+    <slider x="20" step="0.05" y="75" max="1" width="150" display="order-spawn-rate" height="50" min="0.05" direction="Horizontal" default="0.55" variable="order-spawn-rate"></slider>
+    <slider x="20" step="0.05" y="140" max="0.8" width="150" display="priority-order-ratio" height="50" min="0" direction="Horizontal" default="0.35" variable="priority-order-ratio"></slider>
+    <slider x="20" step="1" y="10" max="20" width="150" display="num-robots" height="50" min="2" direction="Horizontal" default="8.0" variable="num-robots"></slider>
+    <slider x="195" step="5" y="75" max="100" width="150" display="w-balance" height="50" min="0" direction="Horizontal" default="15.0" variable="w-balance"></slider>
+    <slider x="195" step="5" y="10" max="100" width="150" display="w-energy" height="50" min="0" direction="Horizontal" default="20.0" variable="w-energy"></slider>
+    <slider x="195" step="5" y="140" max="100" width="150" display="w-resilience" height="50" min="0" direction="Horizontal" default="20.0" variable="w-resilience"></slider>
   </widgets>
   <info>## WHAT IS IT?
 

@@ -1,0 +1,49 @@
+;; ============================================================
+;; MODULE: SCENARIOS
+;; Vai trò: Áp dụng bộ tham số vận hành theo kịch bản được chọn.
+;; ============================================================
+
+;; Nhận tên kịch bản và cập nhật các tham số trên Interface.
+to apply-scenario-preset [preset-name]
+
+  ;; Kịch bản Normal mô phỏng kho hoạt động trong điều kiện ổn định.
+  if preset-name = "Normal" [
+    set num-robots 8
+    set order-spawn-rate 0.20
+    set priority-order-ratio 0.15
+    set initial-battery 100
+    set congestion-level 0.1
+    set incident-prob 0
+    set sim-max-ticks 300
+  ]
+  ;; Kịch bản Peak mô phỏng thời điểm lượng đơn tăng cao.
+  if preset-name = "Peak" [
+    set num-robots 8
+    set order-spawn-rate 0.55
+    set priority-order-ratio 0.35
+    set initial-battery 100
+    set congestion-level 0.3
+    set incident-prob 0.005
+    set sim-max-ticks 300
+  ]
+  ;; Kịch bản Congestion mô phỏng kho có nhiều robot và tắc nghẽn cao.
+  if preset-name = "Congestion" [
+    set num-robots 12
+    set order-spawn-rate 0.40
+    set priority-order-ratio 0.25
+    set initial-battery 100
+    set congestion-level 0.8
+    set incident-prob 0.015
+    set sim-max-ticks 300
+  ]
+  ;; Kịch bản Incidents mô phỏng pin thấp và nhiều sự cố phát sinh.
+  if preset-name = "Incidents" [
+    set num-robots 8
+    set order-spawn-rate 0.35
+    set priority-order-ratio 0.30
+    set initial-battery 60
+    set congestion-level 0.4
+    set incident-prob 0.035
+    set sim-max-ticks 300
+  ]
+end

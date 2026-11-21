@@ -451,29 +451,33 @@ Cấu trúc:
 Các loại nhánh thường dùng:
 
 ```text
-feature/t01-ten-task
-fix/t02-ten-loi
-docs/t03-ten-tai-lieu
-chore/t04-ten-cong-viec
+feature/T01-ten-task
+fix/T02-ten-loi
+docs/T03-ten-tai-lieu
+chore/T04-ten-cong-viec
 ```
 
 Ví dụ:
 
 ```text
-chore/t01-bootstrap-vscode-docker
-feature/t02-robot-battery
-feature/t03-basic-strategies
-feature/t04-routing-congestion
-feature/t05-decision-engine
+hore/T01-bootstrap-vscode-docker
+docs/T02-dss-flow-contract
+feature/T03-core-environment
+feature/T04-robot-battery
+feature/T05-orders-basic-strategies
+feature/T06-routing-incidents
+feature/T07-metrics
+feature/T08-decision-engine
 ```
 
 Quy tắc:
 
-- Mã nhiệm vụ viết thường khi đặt tên nhánh: `t01`, `t02`, `t03`.
+- Mã nhiệm vụ viết thường khi đặt tên nhánh: `T01`, `T02`, `T03`.
 - Dùng dấu gạch ngang để phân cách các từ.
 - Không dùng dấu tiếng Việt, khoảng trắng hoặc tên cá nhân.
 - Mỗi nhánh chỉ nên xử lý một nhiệm vụ chính.
-- Tiêu đề Pull Request phải ghi mã nhiệm vụ, ví dụ: `T02: Implement robot battery model`.
+-Tên nhánh phải khớp với task trong kế hoạch.
+- Tiêu đề Pull Request phải ghi mã nhiệm vụ, ví dụ: `T03: Implement core environment.`.
 
 ## 18. Kịch bản demo dự kiến
 
