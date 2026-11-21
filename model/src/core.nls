@@ -1,0 +1,117 @@
+;; ============================================================
+;; MODULE: CORE
+;; Vai trò: Điều khiển quá trình khởi tạo và vòng lặp mô phỏng.
+;; Các procedure trong file này được gọi từ Interface và
+;; BehaviorSpace.
+;; ============================================================
+
+
+;; Khởi tạo lại toàn bộ mô hình từ trạng thái ban đầu.
+;; Hiện tại đây là phiên bản tối thiểu; các bước dựng môi trường,
+;; tạo robot và reset KPI sẽ được bổ sung dần trong T03.
+to setup
+  clear-all
+
+  ;; Khởi tạo vùng lưu kết quả DSS khi bắt đầu một mô hình hoàn toàn mới.
+  set comparison-results []
+  set normalized-results []
+  set strategy-ranking []
+  set recommended-strategy ""
+  set recommendation-reason ""
+  set trade-off-warning ""
+  set decision-summary-data []
+
+  ;; Thiết lập seed để có thể tái tạo chính xác cùng một lượt mô phỏng.
+  set current-run-seed sim-seed
+  random-seed sim-seed
+
+  ;; Áp dụng bộ tham số tương ứng với kịch bản người dùng đã chọn.
+  apply-scenario-preset scenario-preset
+
+  ;; Khởi tạo bản đồ và đưa toàn bộ ô về trạng thái ban đầu.
+  setup-environment
+
+  ;; Thông báo mô hình đã khởi tạo xong và sẵn sàng chạy.
+  set model-status "Ready"
+
+  ;; Đưa bộ đếm thời gian mô phỏng về tick 0.
+  reset-ticks
+end
+
+;; Thực hiện một bước thời gian của mô hình.
+;; Các module orders, incidents, robots và metrics sẽ được
+;; gọi tại đây sau khi T04–T08 hoàn thành.
+to go
+  ;; Dừng lượt mô phỏng khi đã đạt giới hạn tick cấu hình.
+  if ticks >= sim-max-ticks [
+    set model-status "Done"
+    stop
+  ]
+
+  ;; Cập nhật trạng thái để Interface biết mô hình đang chạy.
+  set model-status "Running"
+
+  ;; Tăng bộ đếm thời gian mô phỏng thêm một tick.
+  tick
+end
+
+;; Khởi tạo lại toàn bộ mô hình theo cấu hình hiện tại.
+to reset-model
+  setup
+end
+
+;; Kiểm tra các tham số chính có nằm trong phạm vi hợp lệ hay không.
+to-report validate-configuration
+  if num-robots < 2 or num-robots > 20 [ report false ]
+  if order-spawn-rate < 0.05 or order-spawn-rate > 1 [ report false ]
+  if priority-order-ratio < 0 or priority-order-ratio > 0.8 [ report false ]
+  if initial-battery < 30 or initial-battery > 100 [ report false ]
+  if sim-max-ticks < 100 [ report false ]
+
+  report true
+end
+;; Chuẩn bị một lượt chạy mới nhưng vẫn giữ kết quả của các lượt trước.
+to setup-for-strategy [strat seed-val]
+  ;; Chỉ xóa tác tử, bản đồ và biểu đồ; không xóa kết quả DSS.
+  clear-turtles
+  clear-patches
+  clear-drawing
+  clear-all-plots
+  reset-ticks
+
+  ;; Ghi nhận chiến lược và seed của lượt chạy.
+  set active-strategy strat
+  set sim-seed seed-val
+  set current-run-seed seed-val
+  random-seed seed-val
+
+  ;; Đặt lại các biến tích lũy KPI của riêng lượt chạy này.
+  set total-orders-created 0
+  set total-orders-completed 0
+  set total-orders-ontime 0
+  set total-orders-late 0
+  set total-energy-consumed 0
+  set total-wait-ticks 0
+  set total-broken-ticks 0
+  set total-incidents-triggered 0
+  set total-orders-reassigned 0
+  set total-reassigned-completed 0
+
+  ;; Tạo lại bản đồ nhưng vẫn giữ kết quả so sánh các chiến lược.
+  setup-environment
+  set model-status "Ready"
+end
+
+;; Chạy hoàn chỉnh một chiến lược cho đến giới hạn thời gian mô phỏng.
+to run-single-strategy-to-end [strat seed-val]
+  ;; Chuẩn bị lượt chạy với chiến lược và seed được yêu cầu.
+  setup-for-strategy strat seed-val
+
+  ;; Thực hiện mô phỏng liên tục cho đến giới hạn tick.
+  while [ticks < sim-max-ticks] [
+    go
+  ]
+
+  ;; Đánh dấu lượt mô phỏng đã hoàn thành.
+  set model-status "Done"
+end
