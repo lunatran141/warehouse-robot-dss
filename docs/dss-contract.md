@@ -1,7 +1,7 @@
 # Hợp đồng Kỹ thuật DSS — T02 (`docs/dss-contract.md`)
 
-> **Trạng thái:** Bản đặc tả chính thức cho Task **T02** (`22/11 → 23/11/2026`)  
-> **Người chủ trì (Owner):** TV5 – Phạm Đăng Khôi (`docs/t02-dss-flow-contract`)  
+> **Trạng thái:** Bản đặc tả chính thức cho Task **T02** (`22/11 → 23/11/2026`)
+> **Người chủ trì (Owner):** TV5 – Phạm Đăng Khôi (`docs/t02-dss-flow-contract`)
 > **Mục đích:** Tài liệu hợp đồng duy nhất (**Single Source of Truth**) khóa câu hỏi quyết định, 3 chiến lược điều phối, 5 KPI, Data Dictionary chuẩn **NetLogo 7.0.4** và Procedure Contract cho đủ 12 module `.nls` trước khi triển khai `T03–T08`.
 
 ---
@@ -71,24 +71,21 @@ score(r, o) =
 | `battery_score(r)` | Chuẩn hóa thuận Min-Max của `[battery] of r` (`(b - min_b) / (max_b - min_b)`) | Robot còn nhiều pin hơn được ưu tiên hơn |
 | `workload_score(r)` | Chuẩn hóa ngược Min-Max của `[orders-done] of r` (`(max_w - w) / (max_w - min_w)`) | Robot ít tải hơn được ưu tiên hơn |
 | `priority_score(r, o)` | Đo khả năng **kịp hạn của cặp `(r, o)`**: tính độ dư hạn `slack(r, o) = (deadline-tick - ticks) - estimated-trip-ticks(r, o)` (với `estimated-trip-ticks` = khoảng cách `r → pickup → delivery`). Nếu `priority = "high"` (hoặc đơn sắp quá hạn), chuẩn hóa thuận Min-Max của `slack(r, o)` trên các robot ứng viên; nếu `priority = "normal"`, gán `0.5` trung tính *(kết hợp xếp đơn `"high"` lên trước trong hàng đợi `orders.nls`)* | Khi có đơn khẩn, ưu tiên robot đủ khả năng giao kịp hạn thay vì robot quá xa hoặc kẹt |
-| `congestion_score(r, o)` | Chuẩn hóa ngược Min-Max của `path-congestion (patch-of r) ([pickup-patch] of o)` | Tránh robot phải đi xuyên vùng đang đông đúc |
-
+| `congestion_score(r, o)` | Chuẩn hóa ngược Min-Max của `path-congestion ([patch-here] of r) ([pickup-patch] of o)` | Tránh robot phải đi xuyên vùng đang đông đúc |
 - **Tie-break (hòa điểm)**: Chọn robot có `who` nhỏ hơn.
 - **Cơ chế ánh xạ trọng số theo mục tiêu quản lý + Ràng buộc chống áp đảo (`[0.10, 0.45]`, tổng = `1.00`)**:
   - Theo `README.md` mục 6.3, 5 trọng số điều phối `mc-w-*` thay đổi theo `management-goal` của người quản lý.
   - Để giữ đúng bản chất **đa tiêu chí** (không để `Multi-criteria` tự triệt tiêu về thành `Nearest` hay `Least workload` khi kéo một trọng số lên 100%, đồng thời bảo toàn đánh đổi Pareto thật trong mô phỏng), mọi `mc-w-*` được ràng buộc nằm trong `[0.10, 0.45]` và tổng bằng `1.00`.
   - Khi người quản lý chọn chế độ **`Custom`** (kéo 5 thanh trượt KPI `w-speed .. w-resilience`), hệ thống tính ánh xạ xác định:
     1. Chuẩn hóa 5 slider KPI về `(u_spd, u_ont, u_ene, u_bal, u_res)` có tổng `1.0`.
-    2. Tính thành phần thô theo ngữ nghĩa vận hành:  
-       `raw_dist = 0.7 * u_spd + 0.3 * u_ene`  
-       `raw_bat  = u_ene`  
-       `raw_load = u_bal`  
-       `raw_prio = u_ont`  
+    2. Tính thành phần thô theo ngữ nghĩa vận hành:
+       `raw_dist = 0.7 * u_spd + 0.3 * u_ene`
+       `raw_bat  = u_ene`
+       `raw_load = u_bal`
+       `raw_prio = u_ont`
        `raw_cong = 0.5 * u_res + 0.3 * u_spd + 0.2 * u_ont`
-    3. Áp dụng phép kẹp lồi trong `[0.14, 0.44]` (nằm trọn trong `[0.10, 0.45]`) mà vẫn đảm bảo tổng luôn bằng `1.00`:  
-       `mc_i = 0.14 + 0.30 * (raw_i / sum(raw))`
-
----
+    3. Áp dụng phép kẹp lồi trong `[0.14, 0.44]` (nằm trọn trong `[0.10, 0.45]`) mà vẫn đảm bảo tổng luôn bằng `1.00`:
+       `mc_i = 0.14 + 0.30 * (raw_i / sum(raw))`---
 
 ## 3. Hợp đồng 5 KPI, Chuẩn hóa & Mô hình chấm điểm chiến lược (Tầng 2 — DSS)
 
@@ -379,8 +376,9 @@ Khớp chính xác 12 file được nạp trong `__includes` của [WarehouseRob
 | | `complete-order` | `to [ ord ]` | Đánh dấu `"completed"`, ghi `completed-tick`, cập nhật `total-orders-completed` / `ontime` / `late` / `reassigned-completed` | `robot.nls` |
 | **`basic-strategies.nls`** (TV3) | `select-robot-nearest` | `to-report [ ord ]` → robot/nobody | Chọn robot gần `pickup-patch` nhất trong `available-robots` | `orders.nls` |
 | | `select-robot-least-workload` | `to-report [ ord ]` → robot/nobody | Chọn robot có `orders-done` nhỏ nhất trong `available-robots` | `orders.nls` |
-| **`routing.nls`** (TV4) | `next-step-toward` | `to-report [ dest-p ]` (robot context) → patch/nobody | Chọn ô hợp lệ tiếp theo từ `accessible-neighbors` tránh kệ/lối khóa/đông | `robot.nls` |
+| **`routing.nls`** (TV4) | `next-step-toward` | `to-report [ dest-p ]` (robot context) → patch/nobody | Chọn ô hợp lệ tiếp theo từ `accessible-neighbors`, tránh kệ/lối khóa/đông | `robot.nls` |
 | | `move-robot-step` | `to` (robot context) | Di chuyển 1 bước tới `next-step-toward target-patch`; nếu kẹt chuyển `"waiting"` & tăng `wait-streak` | `robot.nls` |
+| | `estimated-trip-ticks` | `to-report [ r o ]` → number | Ước lượng số tick để robot `r` hoàn thành đơn `o` | `decision-engine.nls` |
 | **`congestion.nls`** (TV4) | `update-congestion` | `to` | Tính `congestion-score` trên từng patch dựa trên mật độ robot & `congestion-level` | `core.nls` |
 | | `path-congestion` | `to-report [ from-p to-p ]` → number | Ước lượng mức độ tắc nghẽn dọc tuyến giữa `from-p` và `to-p` | `decision-engine.nls`, `routing.nls` |
 | **`incidents.nls`** (TV4) | `update-incidents` | `to` | Sinh sự cố ngẫu nhiên theo `incident-prob` và phục hồi sự cố hết hạn | `core.nls` |
@@ -405,9 +403,9 @@ Khớp chính xác 12 file được nạp trong `__includes` của [WarehouseRob
 
 Theo `Task_Chung.pdf`, `T09` của TV3 **không được tính lại KPI riêng**. Vì vậy `decision-engine.nls` (TV5) đóng gói toàn bộ kết quả dưới dạng danh sách NetLogo chuẩn (không cần extension bổ sung) để TV3 chỉ định dạng câu giải thích:
 
-1. **`comparison-results`**: List gồm 3 phần tử theo chiến lược, mỗi phần tử dạng:  
+1. **`comparison-results`**: List gồm 3 phần tử theo chiến lược, mỗi phần tử dạng:
    `[ strategy-name raw-speed raw-ontime raw-energy raw-balance raw-resilience ]`
-2. **`normalized-results`**: List gồm 3 phần tử dạng:  
+2. **`normalized-results`**: List gồm 3 phần tử dạng:
    `[ strategy-name norm-speed norm-ontime norm-energy norm-balance norm-resilience ]`
 3. **`strategy-ranking`**: List đã sắp xếp giảm dần theo `Strategy Score` (`[ [rank1-name score1 ...] [rank2-name score2 ...] [rank3-name score3 ...] ]`).
 4. **`decision-summary-data`**: List 9 phần tử cố định cho `generate-recommendation` đọc theo `item <index>`:
