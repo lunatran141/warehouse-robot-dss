@@ -1,0 +1,286 @@
+
+;; T04 - ROBOT
+;; Quan ly 7 trang thai va du lieu KPI.
+
+to setup-robots
+  create-robots num-robots [
+    set robot-state "idle"
+    set battery initial-battery
+    set energy-used 0
+    set current-order nobody
+    set target-patch nobody
+
+    set orders-done 0
+    set distance-traveled 0
+    set wait-ticks 0
+    set active-ticks 0
+    set charge-count 0
+    set broken-until 0
+    set wait-streak 0
+
+    ;; Chi xuat phat o vi tri hop le
+    let start-patch one-of patches with [
+      member? patch-type ["aisle" "waiting-zone"] and
+      not is-blocked?
+    ]
+    if start-patch != nobody [
+      move-to start-patch
+    ]
+
+    set shape "circle"
+    set size 1
+    update-robot-visuals
+  ]
+end
+
+
+;; Robot san sang nhan don
+to-report available-robots
+  report robots with [
+    robot-state = "idle" and
+    not is-low-battery?
+  ]
+end
+
+
+;; Gan don cho robot hien tai
+to assign-task [ord]
+  if ord = nobody [ stop ]
+  if robot-state != "idle" [ stop ]
+  if is-low-battery? [ stop ]
+  if [order-status] of ord != "waiting" [ stop ]
+  if [pickup-patch] of ord = nobody [ stop ]
+
+  set current-order ord
+  set target-patch [pickup-patch] of ord
+  set robot-state "assigned"
+  set wait-streak 0
+
+  ask ord [
+    set order-status "assigned"
+    set assigned-robot myself
+  ]
+
+  update-robot-visuals
+end
+
+
+;; Moi robot xu ly dung mot trang thai moi tick
+to update-robots
+  ask robots [
+    update-one-robot
+    update-robot-visuals
+  ]
+end
+
+
+to update-one-robot
+  if robot-state = "broken" [
+    set total-broken-ticks total-broken-ticks + 1
+
+    if ticks >= broken-until [
+      ;; Cuu ho robot het pin: nap du 20% de ve tram
+      if battery <= 0 [
+        set battery 20
+      ]
+
+      set robot-state "idle"
+      set target-patch nobody
+      set wait-streak 0
+
+      if is-low-battery? [
+        send-to-charger
+      ]
+    ]
+    stop
+  ]
+
+  if robot-state = "idle" [
+    if is-low-battery? [
+      send-to-charger
+    ]
+    stop
+  ]
+
+  if robot-state = "assigned" [
+    ifelse current-order = nobody [
+      set robot-state "idle"
+      set target-patch nobody
+    ] [
+      set robot-state "to-pickup"
+      set target-patch [pickup-patch] of current-order
+    ]
+    stop
+  ]
+
+  if robot-state = "to-pickup" [
+    if current-order = nobody [
+      set robot-state "idle"
+      set target-patch nobody
+      stop
+    ]
+
+    set target-patch [pickup-patch] of current-order
+    travel-one-step
+
+    if robot-state = "broken" [ stop ]
+
+    if patch-here = target-patch [
+      ask current-order [
+        set order-status "picked"
+      ]
+      set target-patch [delivery-patch] of current-order
+      set robot-state "carrying"
+      set wait-streak 0
+    ]
+    stop
+  ]
+
+  if robot-state = "carrying" [
+    if current-order = nobody [
+      set robot-state "idle"
+      set target-patch nobody
+      stop
+    ]
+
+    set target-patch [delivery-patch] of current-order
+    travel-one-step
+
+    if robot-state = "broken" [ stop ]
+
+    if patch-here = target-patch [
+      let finished-order current-order
+
+      ;; T05 cap nhat trang thai don va KPI don
+      complete-order finished-order
+
+      set orders-done orders-done + 1
+      set current-order nobody
+      set target-patch nobody
+      set robot-state "idle"
+      set wait-streak 0
+
+      if is-low-battery? [
+        send-to-charger
+      ]
+    ]
+    stop
+  ]
+
+  if robot-state = "waiting" [
+    set wait-ticks wait-ticks + 1
+    set total-wait-ticks total-wait-ticks + 1
+
+    ifelse current-order != nobody [
+      ifelse [order-status] of current-order = "picked" [
+        set robot-state "carrying"
+      ] [
+        set robot-state "to-pickup"
+      ]
+    ] [
+      ifelse target-patch != nobody [
+        ifelse [patch-type] of target-patch = "charger" [
+          set robot-state "charging"
+        ] [
+          set robot-state "idle"
+        ]
+      ] [
+        set robot-state "idle"
+      ]
+    ]
+    stop
+  ]
+
+  if robot-state = "charging" [
+    if target-patch = nobody [
+      send-to-charger
+    ]
+
+    if target-patch = nobody [ stop ]
+
+    ifelse patch-here = target-patch [
+      charge-battery
+    ] [
+      travel-one-step
+    ]
+    stop
+  ]
+end
+
+
+;; Di chuyen va ghi nhan KPI
+to travel-one-step
+  if target-patch = nobody [ stop ]
+  if robot-state = "broken" [ stop ]
+
+  ;; Neu dung o dich thi khong can di chuyen
+  if patch-here = target-patch [ stop ]
+
+  if battery <= 0 [
+    robot-out-of-battery
+    stop
+  ]
+
+  let old-patch patch-here
+
+  ;; T06 phu trach tim duong va di chuyen
+  move-robot-step
+
+  if patch-here != old-patch [
+    set distance-traveled distance-traveled + 1
+    set active-ticks active-ticks + 1
+
+    ;; Quy uoc T04: 1 don vi pin / buoc
+    consume-battery 1
+
+    if battery <= 0 [
+      robot-out-of-battery
+    ]
+  ]
+end
+
+
+;; Het pin: hong va tra lai don
+to robot-out-of-battery
+  if current-order != nobody [
+    release-order current-order
+    set current-order nobody
+  ]
+
+  set battery 0
+  set robot-state "broken"
+  set broken-until ticks + 5
+  set target-patch nobody
+  set wait-streak 0
+end
+
+
+;; Mau va nhan hien thi
+to update-robot-visuals
+  if robot-state = "idle" [
+    set color gray
+  ]
+
+  if member? robot-state ["assigned" "to-pickup"] [
+    set color blue
+  ]
+
+  if robot-state = "carrying" [
+    set color cyan
+  ]
+
+  if robot-state = "waiting" [
+    set color orange
+  ]
+
+  if robot-state = "charging" [
+    set color lime
+  ]
+
+  if robot-state = "broken" [
+    set color red
+  ]
+
+  set label (word precision battery 0 "%")
+  set label-color white
+end

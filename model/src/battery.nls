@@ -1,0 +1,54 @@
+
+;; T04 - BATTERY
+;; Quan ly tieu thu pin va sac pin.
+
+;; Tru pin, khong de pin am
+to consume-battery [amount]
+  let used min (list battery (max (list 0 amount)))
+
+  set battery battery - used
+  set energy-used energy-used + used
+  set total-energy-consumed total-energy-consumed + used
+end
+
+
+;; Pin duoi 20% la pin yeu
+to-report is-low-battery?
+  report battery < 20
+end
+
+
+;; Tim tram sac gan nhat
+to send-to-charger
+  if robot-state = "broken" [ stop ]
+  if current-order != nobody [ stop ]
+
+  let charger nearest-charger-patch
+  if charger = nobody [ stop ]
+
+  ;; Chi dem mot lan cho moi luot sac
+  if robot-state != "charging" [
+    set charge-count charge-count + 1
+  ]
+
+  set target-patch charger
+  set robot-state "charging"
+  set wait-streak 0
+end
+
+
+;; Sac pin tai tram sac
+to charge-battery
+  if [patch-type] of patch-here != "charger" [
+    stop
+  ]
+
+  set battery min (list 100 (battery + charge-rate))
+
+  ;; Du 95% thi quay lai lam viec
+  if battery >= 95 [
+    set robot-state "idle"
+    set target-patch nobody
+    set wait-streak 0
+  ]
+end
