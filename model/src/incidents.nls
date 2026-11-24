@@ -1,0 +1,4 @@
+;; Temporary stub - T06 will replace this procedure.
+to break-robot [r duration]
+  error "break-robot chua duoc trien khai: cho T06"
+end

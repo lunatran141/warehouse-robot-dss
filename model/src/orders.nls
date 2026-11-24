@@ -1,0 +1,4 @@
+;; Temporary stub - T05 will replace this procedure.
+to complete-order [ord]
+  error "complete-order chua duoc trien khai: cho T05"
+end

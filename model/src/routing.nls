@@ -1,0 +1,4 @@
+;; Temporary stub - T06 will replace this procedure.
+to move-robot-step
+  error "move-robot-step chua duoc trien khai: cho T06"
+end
