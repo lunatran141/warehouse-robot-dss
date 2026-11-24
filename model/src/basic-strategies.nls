@@ -1,0 +1,35 @@
+;; T05 - Two baseline strategies
+
+to-report select-robot-nearest [ord]
+  if ord = nobody [ report nobody ]
+
+  let pickup [pickup-patch] of ord
+  if pickup = nobody [ report nobody ]
+
+  let candidates available-robots
+  if not any? candidates [ report nobody ]
+
+  let shortest min [distance pickup] of candidates
+  let nearest candidates with [distance pickup = shortest]
+
+  report min-one-of nearest [who]
+end
+
+
+to-report select-robot-least-workload [ord]
+  if ord = nobody [ report nobody ]
+
+  let pickup [pickup-patch] of ord
+  if pickup = nobody [ report nobody ]
+
+  let candidates available-robots
+  if not any? candidates [ report nobody ]
+
+  let smallest-load min [orders-done] of candidates
+  let least-loaded candidates with [orders-done = smallest-load]
+
+  let shortest min [distance pickup] of least-loaded
+  let nearest least-loaded with [distance pickup = shortest]
+
+  report min-one-of nearest [who]
+end

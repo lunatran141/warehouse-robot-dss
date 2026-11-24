@@ -1,0 +1,5 @@
+;; Stub phục vụ biên dịch trong lúc chờ T08.
+;; TV5 thay toàn bộ procedure này khi triển khai Multi-criteria.
+to-report select-robot-multi-criteria [ord]
+  error "Multi-criteria chua duoc trien khai: cho TV5 hoan thanh T08"
+end
