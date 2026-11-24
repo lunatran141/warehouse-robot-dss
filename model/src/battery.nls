@@ -1,0 +1,61 @@
+
+
+;; MODULE: BATTERY
+;; TASK: T04 - Robot & Battery
+;; OWNER: TV2
+
+
+;; Consume battery and record energy usage.
+to consume-battery [amount]
+  let used min (list battery (max (list 0 amount)))
+
+  set battery battery - used
+  set energy-used energy-used + used
+  set total-energy-consumed total-energy-consumed + used
+
+  update-robot-visuals
+end
+
+
+;; Report whether battery is below the safety threshold.
+to-report is-low-battery?
+  report battery < 20
+end
+
+
+;; Send an idle robot to the nearest available charger.
+to send-to-charger
+  if robot-state = "broken" [ stop ]
+  if current-order != nobody [ stop ]
+
+  let charger nearest-charger-patch
+  if charger = nobody [ stop ]
+
+  if robot-state != "charging" and patch-here = charger [
+    set charge-count charge-count + 1
+  ]
+
+  set target-patch charger
+  set robot-state "charging"
+  set wait-streak 0
+
+  update-robot-visuals
+end
+
+
+;; Charge battery at an available charging station.
+to charge-battery
+  if robot-state != "charging" [ stop ]
+  if [patch-type] of patch-here != "charger" [ stop ]
+  if [is-blocked?] of patch-here [ stop ]
+
+  set battery min (list 100 (battery + charge-rate))
+
+  if battery >= 95 [
+    set robot-state "idle"
+    set target-patch nobody
+    set wait-streak 0
+  ]
+
+  update-robot-visuals
+end
