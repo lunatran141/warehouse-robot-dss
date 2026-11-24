@@ -1,4 +1,138 @@
-;; Temporary stub - T05 will replace this procedure.
+;; T05 - Orders
+
+to generate-orders
+  ;; Mỗi tick có xác suất tạo tối đa một đơn.
+  if random-float 1 >= order-spawn-rate [ stop ]
+
+  let pickup random-pickup-patch
+  let delivery random-packing-patch
+
+  ;; Không tạo đơn thiếu điểm lấy hoặc điểm giao.
+  if pickup = nobody or delivery = nobody [ stop ]
+
+  create-orders 1 [
+    set order-status "waiting"
+
+    ifelse random-float 1 < priority-order-ratio [
+      set priority "high"
+    ] [
+      set priority "normal"
+    ]
+
+    set created-tick ticks
+    set completed-tick -1
+    set pickup-patch pickup
+    set delivery-patch delivery
+    set assigned-robot nobody
+    set was-reassigned? false
+
+    ;;Quy dinh high 45 tick, normal 90 tick.
+    ifelse priority = "high" [
+      set deadline-tick created-tick + 45
+    ] [
+      set deadline-tick created-tick + 90
+    ]
+
+    move-to pickup
+    set size 0.5
+    set color yellow
+  ]
+
+  set total-orders-created total-orders-created + 1
+end
+
+;; Đơn high đứng trước; cùng mức ưu tiên thì đơn cũ đứng trước.
+;; Nếu vẫn hòa, dùng who để kết quả có thể lặp lại.
+to-report order-before? [a b]
+  if ([priority] of a) != ([priority] of b) [
+    report ([priority] of a) = "high"
+  ]
+
+  if ([created-tick] of a) != ([created-tick] of b) [
+    report ([created-tick] of a) < ([created-tick] of b)
+  ]
+
+  report ([who] of a) < ([who] of b)
+end
+
+to-report unassigned-orders
+  let waiting sort (orders with [order-status = "waiting"])
+  report sort-by [[a b] -> order-before? a b] waiting
+end
+
+to assign-unassigned-orders
+  foreach unassigned-orders [ord ->
+    let chosen nobody
+
+    if active-strategy = "Nearest" [
+      set chosen select-robot-nearest ord
+    ]
+
+    if active-strategy = "Least workload" [
+      set chosen select-robot-least-workload ord
+    ]
+
+    if active-strategy = "Multi-criteria" [
+    set chosen select-robot-multi-criteria ord
+    ]
+
+    if not member? active-strategy
+      ["Nearest" "Least workload" "Multi-criteria"] [
+      error (word "Chien luoc khong hop le: " active-strategy)
+    ]
+
+    if chosen != nobody [
+      ask chosen [ assign-task ord ]
+    ]
+  ]
+end
+
+;; Đếm đơn giao trễ và đơn chưa giao đã quá hạn.
+;; Không cộng dồn mỗi tick, vì một đơn quá hạn sẽ bị đếm lặp.
+to update-orders
+  set total-orders-late count orders with [
+    (order-status = "completed" and completed-tick > deadline-tick) or
+    (order-status != "completed" and ticks > deadline-tick)
+  ]
+end
+
+
+;; Robot T04 gọi procedure này khi tới điểm giao.
 to complete-order [ord]
-  error "complete-order chua duoc trien khai: cho T05"
+  if ord = nobody [ stop ]
+  if [order-status] of ord != "picked" [ stop ]
+
+  ask ord [
+    set order-status "completed"
+    set completed-tick ticks
+  ]
+
+  set total-orders-completed total-orders-completed + 1
+
+  if ([completed-tick] of ord) <= ([deadline-tick] of ord) [
+    set total-orders-ontime total-orders-ontime + 1
+  ]
+
+  if [was-reassigned?] of ord [
+    set total-reassigned-completed total-reassigned-completed + 1
+  ]
+
+  update-orders
+end
+
+
+;; T06 gọi procedure này khi robot hỏng hoặc hết pin.
+;; Bên T06 chịu trách nhiệm xóa current-order của robot.
+to release-order [ord]
+  if ord = nobody [ stop ]
+  if [order-status] of ord = "waiting" [ stop ]
+  if [order-status] of ord = "completed" [ stop ]
+
+  ask ord [
+    set order-status "waiting"
+    set assigned-robot nobody
+    set was-reassigned? true
+  ]
+
+  set total-orders-reassigned total-orders-reassigned + 1
 end
