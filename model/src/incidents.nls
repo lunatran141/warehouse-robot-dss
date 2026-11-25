@@ -1,4 +1,110 @@
-;; Temporary stub - T06 will replace this procedure.
-to break-robot [r duration]
-  error "break-robot chua duoc trien khai: cho T06"
+;; ============================================================
+;; MODULE: INCIDENTS (Task T06 - TV4: Nguyen Duc Tien)
+;; Vai tro: Tao va quan ly su co (hong robot, khoa loi di) va phuc hoi.
+;; Tuân thủ hop dong ky thuat: docs/dss-contract.md
+;; ============================================================
+
+;; Chuyen robot r sang trang thai broken trong duration tick.
+;; Neu robot dang giu don hang, thu hoi don ve hang cho thong qua release-order
+;; de dam bao don duoc phan cong lai, do KPI kha nang phuc hoi (Resilience).
+to break-robot [ r duration ]
+  if r = nobody [
+    stop
+  ]
+
+  ask r [
+    set robot-state "broken"
+    set broken-until ticks + duration
+
+    ;; Thu hoi don hang dang thuc hien de robot khac nhan lai
+    if current-order != nobody [
+      release-order current-order
+      set current-order nobody
+    ]
+
+    set target-patch nobody
+    set wait-streak 0
+    update-robot-visuals
+  ]
+
+  set total-incidents-triggered total-incidents-triggered + 1
+end
+
+;; Khoa mot doan loi di tam thoi trong duration tick.
+;; Danh dau is-blocked? = true va to mau do de canh bao, robot khong the di qua.
+to block-aisle-segment [ duration ]
+  let available-aisles patches with [
+    patch-type = "aisle" and
+    not is-blocked?
+  ]
+
+  if not any? available-aisles [
+    stop
+  ]
+
+  let target-p one-of available-aisles
+  let block-expire ticks + duration
+
+  ;; Chon o muc tieu va toi da 1 o loi di lan can de tao vat can thuc te
+  let valid-neighbors [accessible-neighbors] of target-p
+  let group-to-block (patch-set target-p)
+
+  if any? valid-neighbors [
+    set group-to-block (patch-set target-p (one-of valid-neighbors))
+  ]
+
+  ask group-to-block [
+    set is-blocked? true
+    set blocked-until block-expire
+    set pcolor red
+  ]
+
+  set total-incidents-triggered total-incidents-triggered + 1
+end
+
+;; Quan ly su co theo tung tick mo phong:
+;; 1. Tu dong mo lai cac o loi di da het thoi han khoa.
+;; 2. Phat sinh su co ngau nhien theo xac suat incident-prob cua kich ban.
+to update-incidents
+  ;; 1. Phuc hoi cac o da het thoi gian khoa
+  ask patches with [is-blocked? and ticks >= blocked-until] [
+    set is-blocked? false
+    set blocked-until 0
+    ;; Tra lai mau goc cua loai o
+    ifelse patch-type = "aisle" [
+      set pcolor gray + 2
+    ] [
+      if patch-type = "pickup" [ set pcolor blue ]
+      if patch-type = "packing" [ set pcolor green ]
+      if patch-type = "charger" [ set pcolor yellow ]
+      if patch-type = "waiting-zone" [ set pcolor violet ]
+    ]
+  ]
+
+  ;; 2. Phat sinh su co ngau nhien dua theo incident-prob
+  if random-float 1.0 < incident-prob [
+    let active-robots robots with [robot-state != "broken"]
+
+    ifelse any? active-robots and random-float 1.0 < 0.5 [
+      ;; Su co 1: Hong mot robot ngau nhien trong 15 - 30 tick
+      let victim one-of active-robots
+      break-robot victim (15 + random 15)
+    ] [
+      ;; Su co 2: Khoa doan loi di trong 20 - 40 tick
+      block-aisle-segment (20 + random 20)
+    ]
+  ]
+end
+
+;; Procedure demo tuong tac cho nguoi dung tren giao dien Interface.
+;; Kich hoat tuc thi 1 su co de quan sat kha nang phan ung va phuc hoi cua doi robot.
+to trigger-manual-incident
+  let active-robots robots with [robot-state != "broken"]
+
+  ifelse any? active-robots and random-float 1.0 < 0.5 [
+    let victim one-of active-robots
+    break-robot victim 30
+  ] [
+    block-aisle-segment 30
+  ]
 end
