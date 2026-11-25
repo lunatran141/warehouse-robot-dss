@@ -1,4 +1,94 @@
-;; Temporary stub - T06 will replace this procedure.
+;; ============================================================
+;; MODULE: ROUTING (Task T06 - TV4: Nguyen Duc Tien)
+;; Vai tro: Tim duong di, tranh ke hang, tranh o bi khoa va tranh tac nghen.
+;; Tuân thủ hop dong ky thuat: docs/dss-contract.md
+;; ============================================================
+
+;; Uoc luong tong so tick can thiet de robot r hoan thanh don hang o.
+;; Cong thuc Manhattan dua tren khoang cach: robot -> pickup -> delivery.
+;; Duoc Decision Engine su dung de tinh do du han (slack) cho don uu tien.
+to-report estimated-trip-ticks [ r ord ]
+  if r = nobody or ord = nobody [
+    report 999
+  ]
+
+  let r-patch [patch-here] of r
+  let p-patch [pickup-patch] of ord
+  let d-patch [delivery-patch] of ord
+
+  if r-patch = nobody or p-patch = nobody or d-patch = nobody [
+    report 999
+  ]
+
+  let dist-r-to-p abs ([pxcor] of r-patch - [pxcor] of p-patch) + abs ([pycor] of r-patch - [pycor] of p-patch)
+  let dist-p-to-d abs ([pxcor] of p-patch - [pxcor] of d-patch) + abs ([pycor] of p-patch - [pycor] of d-patch)
+
+  report dist-r-to-p + dist-p-to-d
+end
+
+;; Chon o hop le tiep theo de robot di chuyen huong ve o dich dest-p.
+;; Goi trong ngu canh robot (robot context).
+;; Thuat toan danh gia o lan can hop le (khong phai ke hang, khong bi su co khoa),
+;; ket hop khoang cach, muc do tac nghen va mat do robot khac tren o de tranh va cham.
+to-report next-step-toward [ dest-p ]
+  if dest-p = nobody [
+    report nobody
+  ]
+
+  if patch-here = dest-p [
+    report nobody
+  ]
+
+  let current-r self
+  let candidates [accessible-neighbors] of patch-here
+
+  ;; Neu khong con o lan can nao di duoc (bi quay quanh boi ke hoac su co khoa)
+  if not any? candidates [
+    report nobody
+  ]
+
+  ;; Tinh yeu to ne ket truoc khi vao khoi reporter cua min-one-of
+  let detour-factor ifelse-value (wait-streak >= 2) [ random-float 2.0 ] [ 0 ]
+
+  ;; Tim o co tong chi phi di chuyen nho nhat (khoi lenh trong min-one-of phai la bieu thuc thuan tuy)
+  let best-patch min-one-of candidates [
+    (distance dest-p) + (congestion-score * 0.35) + (count (robots-here with [self != current-r]) * 3.0) + detour-factor
+  ]
+
+  report best-patch
+end
+
+;; Thuc hien 1 buoc di chuyen cua robot ve phia target-patch.
+;; Goi trong ngu canh robot (robot context) boi procedure travel-one-step trong robot.nls.
 to move-robot-step
-  error "move-robot-step chua duoc trien khai: cho T06"
+  if target-patch = nobody [
+    stop
+  ]
+
+  if patch-here = target-patch [
+    stop
+  ]
+
+  let next-p next-step-toward target-patch
+
+  ifelse next-p != nobody and next-p != patch-here [
+    let current-r self
+    let other-robots (robots-on next-p) with [self != current-r]
+
+    ;; Neu o tiep theo dang co robot khac va chua ket lau, nhuong duong 1 tick de giam un tac
+    if any? other-robots and wait-streak < 2 and random-float 1 < 0.6 [
+      set robot-state "waiting"
+      set wait-streak wait-streak + 1
+      stop
+    ]
+
+    ;; Di chuyen toi o tiep theo va lap tuc xoa bo dem ket
+    face next-p
+    move-to next-p
+    set wait-streak 0
+  ] [
+    ;; Khong tim duoc duong di hop le: tam dung va tang chuoi ket
+    set robot-state "waiting"
+    set wait-streak wait-streak + 1
+  ]
 end
