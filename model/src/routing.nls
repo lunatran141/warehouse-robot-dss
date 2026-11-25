@@ -20,8 +20,8 @@ to-report estimated-trip-ticks [ r ord ]
     report 999
   ]
 
-  let dist-r-to-p (abs ([pxcor] of r-patch - [pxcor] of p-patch) + abs ([pycor] of r-patch - [pycor] of p-patch))
-  let dist-p-to-d (abs ([pxcor] of p-patch - [pxcor] of d-patch) + abs ([pycor] of p-patch - [pycor] of d-patch))
+  let dist-r-to-p abs ([pxcor] of r-patch - [pxcor] of p-patch) + abs ([pycor] of r-patch - [pycor] of p-patch)
+  let dist-p-to-d abs ([pxcor] of p-patch - [pxcor] of d-patch) + abs ([pycor] of p-patch - [pycor] of d-patch)
 
   report dist-r-to-p + dist-p-to-d
 end
@@ -40,7 +40,6 @@ to-report next-step-toward [ dest-p ]
   ]
 
   let current-r self
-  let current-streak wait-streak
   let candidates [accessible-neighbors] of patch-here
 
   ;; Neu khong con o lan can nao di duoc (bi quay quanh boi ke hoac su co khoa)
@@ -48,17 +47,12 @@ to-report next-step-toward [ dest-p ]
     report nobody
   ]
 
-  ;; Tim o co tong chi phi di chuyen nho nhat
+  ;; Tinh yeu to ne ket truoc khi vao khoi reporter cua min-one-of
+  let detour-factor ifelse-value (wait-streak >= 2) [ random-float 2.0 ] [ 0 ]
+
+  ;; Tim o co tong chi phi di chuyen nho nhat (khoi lenh trong min-one-of phai la bieu thuc thuan tuy)
   let best-patch min-one-of candidates [
-    let dist-cost distance dest-p
-    let cong-cost congestion-score * 0.35
-    let occ-cost count (robots-here with [self != current-r]) * 3.0
-
-    ;; Khi robot da bi ket qua nhieu tick (wait-streak >= 2),
-    ;; them thanh phan ngau nhien de kich hoat re-routing tim duong vong tranh un tac
-    let detour-factor ifelse-value (current-streak >= 2) [ random-float 2.0 ] [ 0 ]
-
-    (dist-cost + cong-cost + occ-cost + detour-factor)
+    (distance dest-p) + (congestion-score * 0.35) + (count (robots-here with [self != current-r]) * 3.0) + detour-factor
   ]
 
   report best-patch
