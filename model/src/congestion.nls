@@ -1,0 +1,61 @@
+;; ============================================================
+;; MODULE: CONGESTION (Task T06 - TV4: Nguyen Duc Tien)
+;; Vai tro: Do luong mat do robot va uoc luong tac nghen tren ban do kho.
+;; Tuan thu hop dong ky thuat: docs/dss-contract.md
+;; ============================================================
+
+;; Cap nhat chi so tac nghen congestion-score tren tung patch cua kho.
+;; Duoc goi dinh ky moi tick trong chu ky mo phong.
+to update-congestion
+  ask patches [
+    ;; Dem so robot tai o hien tai va cac o lan can 4 huong
+    let r-here count robots-here
+    let r-near count robots-on neighbors4
+
+    ;; Chi so tac nghen = (mat do truc tiep + anh huong lan can) * (1 + he so kich ban)
+    set congestion-score (r-here * 2.0 + r-near * 0.5) * (1 + congestion-level)
+
+    ;; Cap nhat mau sac truc quan cho cac o loi di (aisle) khong bi su co khoa
+    ;; Giup nguoi quan ly quan sat truc quan cac diem nong giao thong tren Interface
+    if patch-type = "aisle" and not is-blocked? [
+      ifelse congestion-score >= 2.0 [
+        set pcolor orange - 1    ;; Diem nong tac nghen
+      ] [
+        set pcolor gray + 2      ;; Loi di thong thoang binh thuong
+      ]
+    ]
+  ]
+end
+
+;; Uoc luong muc do tac nghen trung binh doc tuyen giua hai o from-p va to-p.
+;; Reporter nay duoc goi boi Decision Engine (tinh c_score cho Multi-criteria)
+;; va module Routing khi danh gia duong di.
+to-report path-congestion [ from-p to-p ]
+  if from-p = nobody or to-p = nobody [
+    report 0
+  ]
+
+  if from-p = to-p [
+    report [congestion-score] of from-p
+  ]
+
+  ;; Xac dinh hinh chu nhat bao quanh hanh lang di chuyen giua hai diem
+  let min-x min (list ([pxcor] of from-p) ([pxcor] of to-p))
+  let max-x max (list ([pxcor] of from-p) ([pxcor] of to-p))
+  let min-y min (list ([pycor] of from-p) ([pycor] of to-p))
+  let max-y max (list ([pycor] of from-p) ([pycor] of to-p))
+
+  ;; Lay cac o loi di hop le trong hanh lang (loai bo ke hang va o bi khoa)
+  let corridor-patches patches with [
+    pxcor >= min-x and pxcor <= max-x and
+    pycor >= min-y and pycor <= max-y and
+    patch-type != "shelf" and
+    not is-blocked?
+  ]
+
+  ifelse any? corridor-patches [
+    report mean [congestion-score] of corridor-patches
+  ] [
+    report 0
+  ]
+end
