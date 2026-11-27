@@ -7,8 +7,7 @@
 
 
 ;; Khởi tạo lại toàn bộ mô hình từ trạng thái ban đầu.
-;; Hiện tại đây là phiên bản tối thiểu; các bước dựng môi trường,
-;; tạo robot và reset KPI sẽ được bổ sung dần trong T03.
+;; Khởi tạo đầy đủ môi trường, robot, KPI và trạng thái mô phỏng.
 to setup
   clear-all
 
@@ -31,6 +30,12 @@ to setup
   ;; Khởi tạo bản đồ và đưa toàn bộ ô về trạng thái ban đầu.
   setup-environment
 
+  ;; Tạo đội robot theo cấu hình num-robots.
+  setup-robots
+
+  ;; Đưa toàn bộ bộ đếm KPI về trạng thái ban đầu.
+  reset-metrics
+
   ;; Thông báo mô hình đã khởi tạo xong và sẵn sàng chạy.
   set model-status "Ready"
 
@@ -38,9 +43,8 @@ to setup
   reset-ticks
 end
 
-;; Thực hiện một bước thời gian của mô hình.
-;; Các module orders, incidents, robots và metrics sẽ được
-;; gọi tại đây sau khi T04–T08 hoàn thành.
+  ;; Thực hiện một bước thời gian của mô hình.
+  ;; Điều phối các module theo đúng chu kỳ xử lý của mỗi tick.
 to go
   ;; Dừng lượt mô phỏng khi đã đạt giới hạn tick cấu hình.
   if ticks >= sim-max-ticks [
@@ -51,8 +55,35 @@ to go
   ;; Cập nhật trạng thái để Interface biết mô hình đang chạy.
   set model-status "Running"
 
+  ;; Phát sinh đơn hàng mới theo order-spawn-rate.
+  generate-orders
+
+  ;; Kích hoạt, cập nhật và kết thúc các sự cố trong kho.
+  update-incidents
+
+  ;; Phân công các đơn đang chờ cho robot phù hợp.
+  assign-unassigned-orders
+
+  ;; Tính lại mức tắc nghẽn trên từng ô.
+  update-congestion
+
+  ;; Cập nhật trạng thái, đường đi, pin và chuyển động của robot.
+  update-robots
+
+  ;; Cập nhật đơn hoàn thành, đúng hạn và trễ hạn.
+  update-orders
+
+  ;; Cập nhật, bảo vệ và tổng hợp các chỉ số KPI.
+  update-metrics
+
   ;; Tăng bộ đếm thời gian mô phỏng thêm một tick.
   tick
+
+  ;; Kết thúc ngay khi vừa đạt giới hạn mô phỏng.
+  if ticks >= sim-max-ticks [
+    set model-status "Done"
+    stop
+  ]
 end
 
 ;; Khởi tạo lại toàn bộ mô hình theo cấu hình hiện tại.
@@ -85,20 +116,18 @@ to setup-for-strategy [strat seed-val]
   set current-run-seed seed-val
   random-seed seed-val
 
-  ;; Đặt lại các biến tích lũy KPI của riêng lượt chạy này.
-  set total-orders-created 0
-  set total-orders-completed 0
-  set total-orders-ontime 0
-  set total-orders-late 0
-  set total-energy-consumed 0
-  set total-wait-ticks 0
-  set total-broken-ticks 0
-  set total-incidents-triggered 0
-  set total-orders-reassigned 0
-  set total-reassigned-completed 0
+  ;; Áp dụng lại cùng kịch bản để các chiến lược được so sánh công bằng.
+  apply-scenario-preset scenario-preset
+
+  ;; Đặt lại toàn bộ KPI của lượt chạy nhưng giữ kết quả DSS cũ.
+  reset-metrics
 
   ;; Tạo lại bản đồ nhưng vẫn giữ kết quả so sánh các chiến lược.
   setup-environment
+
+  ;; Tạo lại đội robot cho lượt chạy chiến lược mới.
+  setup-robots
+
   set model-status "Ready"
 end
 
