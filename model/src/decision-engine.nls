@@ -1,5 +1,526 @@
-;; Stub phục vụ biên dịch trong lúc chờ T08.
-;; TV5 thay toàn bộ procedure này khi triển khai Multi-criteria.
+;; T08 - Decision Engine & Multi-criteria
+
+to-report norm-max [val min-v max-v]
+  if max-v <= min-v [ report 1 ]
+  report max (list 0 (min (list 1 ((val - min-v) / (max-v - min-v)))))
+end
+
+to-report norm-min [val min-v max-v]
+  if max-v <= min-v [ report 1 ]
+  report max (list 0 (min (list 1 ((max-v - val) / (max-v - min-v)))))
+end
+
+;; Chuan hoa 5 slider KPI ve tong = 1.0 (mac dinh chia deu 0.2 khi tong = 0).
+to-report normalized-kpi-weights
+  let ws max (list 0 w-speed)
+  let wo max (list 0 w-ontime)
+  let we max (list 0 w-energy)
+  let wb max (list 0 w-balance)
+  let wr max (list 0 w-resilience)
+  let total ws + wo + we + wb + wr
+  if total <= 0 [ report [0.2 0.2 0.2 0.2 0.2] ]
+  report (list (ws / total) (wo / total) (we / total) (wb / total) (wr / total))
+end
+
+to-report mc-dispatch-weights
+  report (list mc-w-distance mc-w-battery mc-w-workload mc-w-priority mc-w-congestion)
+end
+
+;; Cap nhat trong so KPI va 5 trong so mc-w-* theo management-goal.
+to apply-goal-weights
+  if management-goal = "Balanced" [
+    set w-speed 20
+    set w-ontime 25
+    set w-energy 20
+    set w-balance 15
+    set w-resilience 20
+    set mc-w-distance 0.20
+    set mc-w-battery 0.20
+    set mc-w-workload 0.20
+    set mc-w-priority 0.20
+    set mc-w-congestion 0.20
+    stop
+  ]
+
+  if management-goal = "Fast Delivery" [
+    set w-speed 45
+    set w-ontime 25
+    set w-energy 10
+    set w-balance 10
+    set w-resilience 10
+    set mc-w-distance 0.40
+    set mc-w-battery 0.15
+    set mc-w-workload 0.10
+    set mc-w-priority 0.20
+    set mc-w-congestion 0.15
+    stop
+  ]
+
+  if management-goal = "Minimize Late Orders" [
+    set w-speed 20
+    set w-ontime 45
+    set w-energy 5
+    set w-balance 15
+    set w-resilience 15
+    set mc-w-distance 0.20
+    set mc-w-battery 0.15
+    set mc-w-workload 0.10
+    set mc-w-priority 0.40
+    set mc-w-congestion 0.15
+    stop
+  ]
+
+  if management-goal = "Save Energy" [
+    set w-speed 10
+    set w-ontime 15
+    set w-energy 50
+    set w-balance 15
+    set w-resilience 10
+    set mc-w-distance 0.30
+    set mc-w-battery 0.35
+    set mc-w-workload 0.10
+    set mc-w-priority 0.10
+    set mc-w-congestion 0.15
+    stop
+  ]
+
+  if management-goal = "Load Balance" [
+    set w-speed 10
+    set w-ontime 15
+    set w-energy 15
+    set w-balance 50
+    set w-resilience 10
+    set mc-w-distance 0.15
+    set mc-w-battery 0.20
+    set mc-w-workload 0.40
+    set mc-w-priority 0.10
+    set mc-w-congestion 0.15
+    stop
+  ]
+
+  if management-goal = "Incident Resilience" [
+    set w-speed 10
+    set w-ontime 20
+    set w-energy 10
+    set w-balance 15
+    set w-resilience 45
+    set mc-w-distance 0.15
+    set mc-w-battery 0.25
+    set mc-w-workload 0.15
+    set mc-w-priority 0.15
+    set mc-w-congestion 0.30
+    stop
+  ]
+
+  if management-goal = "Custom" [
+    let u normalized-kpi-weights
+    let u-spd item 0 u
+    let u-ont item 1 u
+    let u-ene item 2 u
+    let u-bal item 3 u
+    let u-res item 4 u
+
+    let raw-dist (0.7 * u-spd) + (0.3 * u-ene)
+    let raw-bat u-ene
+    let raw-load u-bal
+    let raw-prio u-ont
+    let raw-cong (0.5 * u-res) + (0.3 * u-spd) + (0.2 * u-ont)
+    let raw-sum raw-dist + raw-bat + raw-load + raw-prio + raw-cong
+
+    ;; Kep mc-w-* vao [0.14, 0.44] (tong = 1.0) de giu tinh da tieu chi.
+    ifelse raw-sum <= 0 [
+      set mc-w-distance 0.20
+      set mc-w-battery 0.20
+      set mc-w-workload 0.20
+      set mc-w-priority 0.20
+      set mc-w-congestion 0.20
+    ] [
+      set mc-w-distance 0.14 + (0.30 * (raw-dist / raw-sum))
+      set mc-w-battery 0.14 + (0.30 * (raw-bat / raw-sum))
+      set mc-w-workload 0.14 + (0.30 * (raw-load / raw-sum))
+      set mc-w-priority 0.14 + (0.30 * (raw-prio / raw-sum))
+      set mc-w-congestion 0.14 + (0.30 * (raw-cong / raw-sum))
+    ]
+    stop
+  ]
+
+  set w-speed 20
+  set w-ontime 25
+  set w-energy 20
+  set w-balance 15
+  set w-resilience 20
+  set mc-w-distance 0.20
+  set mc-w-battery 0.20
+  set mc-w-workload 0.20
+  set mc-w-priority 0.20
+  set mc-w-congestion 0.20
+end
+
+;; Chon robot cho don ord theo 5 tieu chi; hoa diem chon who nho hon.
 to-report select-robot-multi-criteria [ord]
-  error "Multi-criteria chua duoc trien khai: cho TV5 hoan thanh T08"
+  if ord = nobody [ report nobody ]
+
+  let pickup [pickup-patch] of ord
+  if pickup = nobody [ report nobody ]
+
+  let candidates available-robots
+  if not any? candidates [ report nobody ]
+
+  if (mc-w-distance + mc-w-battery + mc-w-workload + mc-w-priority + mc-w-congestion) <= 0 [
+    apply-goal-weights
+  ]
+
+  if count candidates = 1 [
+    report first sort candidates
+  ]
+
+  let cand-list sort candidates
+
+  let dists map [r -> [distance pickup] of r] cand-list
+  let bats map [r -> [battery] of r] cand-list
+  let loads map [r -> [orders-done] of r] cand-list
+  let congs map [r -> path-congestion ([patch-here] of r) pickup] cand-list
+
+  let min-d min dists
+  let max-d max dists
+  let min-b min bats
+  let max-b max bats
+  let min-w min loads
+  let max-w max loads
+  let min-c min congs
+  let max-c max congs
+
+  ;; Don "high" hoac sap qua han (<= 30 tick) tinh slack; don thuong gan 0.5.
+  let rem-ticks ([deadline-tick] of ord) - ticks
+  let is-urgent? (([priority] of ord) = "high") or (rem-ticks <= 30)
+  let slacks []
+  let min-s 0
+  let max-s 0
+
+  if is-urgent? [
+    set slacks map [r -> rem-ticks - (estimated-trip-ticks r ord)] cand-list
+    set min-s min slacks
+    set max-s max slacks
+  ]
+
+  let best-robot nobody
+  let best-score -1
+  let idx 0
+
+  foreach cand-list [r ->
+    let d-score norm-min (item idx dists) min-d max-d
+    let b-score norm-max (item idx bats) min-b max-b
+    let w-score norm-min (item idx loads) min-w max-w
+    let c-score norm-min (item idx congs) min-c max-c
+    let p-score 0.5
+    if is-urgent? [
+      set p-score norm-max (item idx slacks) min-s max-s
+    ]
+
+    let total-score (mc-w-distance * d-score)
+      + (mc-w-battery * b-score)
+      + (mc-w-workload * w-score)
+      + (mc-w-priority * p-score)
+      + (mc-w-congestion * c-score)
+
+    if best-robot = nobody or total-score > (best-score + 1e-12) [
+      set best-score total-score
+      set best-robot r
+    ]
+
+    set idx idx + 1
+  ]
+
+  report best-robot
+end
+
+;; Chay ca 3 chien luoc cung sim-seed, chuan hoa KPI va xep hang.
+to run-comparison
+  let original-strategy active-strategy
+  let base-seed sim-seed
+
+  set is-comparing? true
+  apply-goal-weights
+
+  set comparison-results []
+  set normalized-results []
+  set strategy-ranking []
+  set recommended-strategy ""
+  set recommendation-reason ""
+  set trade-off-warning ""
+  set decision-summary-data []
+
+  foreach ["Nearest" "Least workload" "Multi-criteria"] [strat ->
+    run-single-strategy-to-end strat base-seed
+    set comparison-results lput collect-current-kpi-snapshot comparison-results
+  ]
+
+  normalize-strategy-results
+  calculate-strategy-scores
+  rank-strategies
+  generate-recommendation
+
+  set active-strategy original-strategy
+  set is-comparing? false
+  set model-status "Done"
+end
+
+to normalize-strategy-results
+  if empty? comparison-results [
+    set normalized-results []
+    stop
+  ]
+
+  let spd-vals map [row -> item 1 row] comparison-results
+  let ont-vals map [row -> item 2 row] comparison-results
+  let ene-vals map [row -> item 3 row] comparison-results
+  let bal-vals map [row -> item 4 row] comparison-results
+  let res-vals map [row -> item 5 row] comparison-results
+
+  let min-spd min spd-vals
+  let max-spd max spd-vals
+  let min-ont min ont-vals
+  let max-ont max ont-vals
+  let min-ene min ene-vals
+  let max-ene max ene-vals
+  let min-bal min bal-vals
+  let max-bal max bal-vals
+  let min-res min res-vals
+  let max-res max res-vals
+
+  set normalized-results map [row ->
+    (list
+      (item 0 row)
+      (norm-min (item 1 row) min-spd max-spd)
+      (norm-max (item 2 row) min-ont max-ont)
+      (norm-min (item 3 row) min-ene max-ene)
+      (norm-max (item 4 row) min-bal max-bal)
+      (norm-max (item 5 row) min-res max-res)
+    )
+  ] comparison-results
+end
+
+;; Moi phan tu strategy-ranking: [name score c-speed c-ontime c-energy c-balance c-resilience]
+to calculate-strategy-scores
+  if empty? normalized-results [
+    set strategy-ranking []
+    stop
+  ]
+
+  let w normalized-kpi-weights
+  let w1 item 0 w
+  let w2 item 1 w
+  let w3 item 2 w
+  let w4 item 3 w
+  let w5 item 4 w
+
+  set strategy-ranking []
+  foreach normalized-results [row ->
+    let c1 w1 * (item 1 row)
+    let c2 w2 * (item 2 row)
+    let c3 w3 * (item 3 row)
+    let c4 w4 * (item 4 row)
+    let c5 w5 * (item 5 row)
+    let total-score c1 + c2 + c3 + c4 + c5
+    set strategy-ranking lput (list (item 0 row) total-score c1 c2 c3 c4 c5) strategy-ranking
+  ]
+end
+
+to-report ranking-before? [a b]
+  if abs ((item 1 a) - (item 1 b)) > 1e-9 [
+    report (item 1 a) > (item 1 b)
+  ]
+  if abs ((item 3 a) - (item 3 b)) > 1e-9 [
+    report (item 3 a) > (item 3 b)
+  ]
+  report (item 0 a) < (item 0 b)
+end
+
+to-report contrib-before? [a b]
+  if abs ((item 2 a) - (item 2 b)) > 1e-9 [
+    report (item 2 a) > (item 2 b)
+  ]
+  if abs ((item 3 a) - (item 3 b)) > 1e-9 [
+    report (item 3 a) > (item 3 b)
+  ]
+  report (item 0 a) < (item 0 b)
+end
+
+to-report raw-row-by-strategy [strat-name]
+  let matches filter [row -> (item 0 row) = strat-name] comparison-results
+  if empty? matches [ report [] ]
+  report first matches
+end
+
+to-report format-kpi-diff-pair [kpi-idx kpi-name best-raw second-raw]
+  if empty? best-raw or empty? second-raw [
+    report (word kpi-name ": khong co du lieu so sanh")
+  ]
+  let v1 item kpi-idx best-raw
+  let v2 item kpi-idx second-raw
+  let d v1 - v2
+  let dec 2
+  let unit ""
+  if kpi-idx = 1 [ set dec 2 set unit " ticks" ]
+  if kpi-idx = 2 [ set dec 1 set unit "%" ]
+  if kpi-idx = 3 [ set dec 2 set unit " pin/don" ]
+  if kpi-idx = 4 [ set dec 3 set unit "" ]
+  if kpi-idx = 5 [ set dec 3 set unit "" ]
+  let rd precision d dec
+  let sign ifelse-value (rd > 0) ["+"] [""]
+  report (word kpi-name ": " (precision v1 dec) unit " vs " (precision v2 dec) unit " (" sign rd unit ")")
+end
+
+;; Xep hang va dong goi decision-summary-data (9 phan tu) cho T09.
+to rank-strategies
+  if empty? strategy-ranking [
+    set recommended-strategy ""
+    set decision-summary-data []
+    stop
+  ]
+
+  set strategy-ranking sort-by [[a b] -> ranking-before? a b] strategy-ranking
+
+  let best-entry item 0 strategy-ranking
+  let best-name item 0 best-entry
+  let best-score item 1 best-entry
+
+  let second-name ""
+  let second-score 0
+  if length strategy-ranking >= 2 [
+    let second-entry item 1 strategy-ranking
+    set second-name item 0 second-entry
+    set second-score item 1 second-entry
+  ]
+
+  let score-gap best-score - second-score
+  set recommended-strategy best-name
+
+  let w normalized-kpi-weights
+  let kpi-names ["Speed" "On-time" "Energy" "Balance" "Resilience"]
+  let contrib-entries (list
+    (list 1 "Speed" (item 2 best-entry) (item 0 w))
+    (list 2 "On-time" (item 3 best-entry) (item 1 w))
+    (list 3 "Energy" (item 4 best-entry) (item 2 w))
+    (list 4 "Balance" (item 5 best-entry) (item 3 w))
+    (list 5 "Resilience" (item 6 best-entry) (item 4 w))
+  )
+  let sorted-contribs sort-by [[a b] -> contrib-before? a b] contrib-entries
+  let top1-idx item 0 (item 0 sorted-contribs)
+  let top1-name item 1 (item 0 sorted-contribs)
+  let top2-idx item 0 (item 1 sorted-contribs)
+  let top2-name item 1 (item 1 sorted-contribs)
+
+  let best-raw raw-row-by-strategy best-name
+  let second-raw raw-row-by-strategy second-name
+  let diff-summary ""
+  ifelse second-name != "" and not empty? best-raw and not empty? second-raw [
+    let s1 format-kpi-diff-pair top1-idx top1-name best-raw second-raw
+    let s2 format-kpi-diff-pair top2-idx top2-name best-raw second-raw
+    set diff-summary (word s1 "; " s2)
+  ] [
+    set diff-summary "Chi co 1 chien luoc de danh gia"
+  ]
+
+  let trade-offs []
+  if not empty? best-raw and length comparison-results >= 2 [
+    let k 1
+    while [k <= 5] [
+      let k-name item (k - 1) kpi-names
+      let is-min? (k = 1 or k = 3)
+      let dec ifelse-value (k = 4 or k = 5) [3] [2]
+      let best-val item k best-raw
+      let worst-loss 0
+      let better-strat ""
+
+      foreach comparison-results [other-row ->
+        let other-name item 0 other-row
+        if other-name != best-name [
+          let other-val item k other-row
+          let loss ifelse-value is-min? [best-val - other-val] [other-val - best-val]
+          if loss > (worst-loss + 1e-6) [
+            set worst-loss loss
+            set better-strat other-name
+          ]
+        ]
+      ]
+
+      let rounded-loss precision worst-loss dec
+      if better-strat != "" and rounded-loss > 0 [
+        set trade-offs lput (list k-name better-strat rounded-loss) trade-offs
+      ]
+
+      set k k + 1
+    ]
+  ]
+
+  set decision-summary-data (list
+    best-name
+    (precision best-score 3)
+    second-name
+    (precision second-score 3)
+    (precision score-gap 3)
+    top1-name
+    top2-name
+    diff-summary
+    trade-offs
+  )
+end
+
+to-report format-strategy-ranking
+  if empty? strategy-ranking [ report "Chua chay so sanh" ]
+  let out ""
+  let pos 1
+  foreach strategy-ranking [entry ->
+    let seg (word "#" pos " " (item 0 entry) " (" (precision (item 1 entry) 3) ")")
+    ifelse out = "" [
+      set out seg
+    ] [
+      set out (word out " | " seg)
+    ]
+    set pos pos + 1
+  ]
+  report out
+end
+
+;; TODO (T09 - TV3): Thay than procedure nay bang phan sinh giai thich day du tu decision-summary-data.
+to generate-recommendation
+  if length decision-summary-data < 9 [
+    set recommendation-reason "Chua co du lieu so sanh de giai thich."
+    set trade-off-warning "Day la khuyen nghi tham khao; nguoi quan ly la nguoi dua ra quyet dinh cuoi cung."
+    stop
+  ]
+
+  let best-name item 0 decision-summary-data
+  let best-score item 1 decision-summary-data
+  let second-name item 2 decision-summary-data
+  let second-score item 3 decision-summary-data
+  let score-gap item 4 decision-summary-data
+  let top1 item 5 decision-summary-data
+  let top2 item 6 decision-summary-data
+  let diff-text item 7 decision-summary-data
+  let trade-offs item 8 decision-summary-data
+
+  set recommendation-reason (word
+    "[Muc tieu: " management-goal " | Kich ban: " scenario-preset "] "
+    "De xuat tham khao: " best-name " (diem " best-score " vs " second-name " " second-score "). "
+    "Hai tieu chi dong gop lon nhat: " top1 " va " top2 " (" diff-text ")."
+  )
+
+  let warn-parts ""
+  if not empty? trade-offs [
+    let first-to first trade-offs
+    set warn-parts (word
+      "Danh doi chinh: kem hon " (item 1 first-to)
+      " o tieu chi " (item 0 first-to)
+      " (lech " (item 2 first-to) "). "
+    )
+  ]
+  if score-gap < 0.05 [
+    set warn-parts (word warn-parts "Canh bao sat diem (chenh lech " score-gap " < 0.05). ")
+  ]
+  set trade-off-warning (word
+    warn-parts
+    "Day la khuyen nghi tham khao; nguoi quan ly la nguoi dua ra quyet dinh cuoi cung."
+  )
 end
