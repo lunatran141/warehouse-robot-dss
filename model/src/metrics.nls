@@ -1,13 +1,6 @@
-;; ============================================================
-;; MODULE: METRICS (Task T07 - TV5: Pham Dang Khoi)
-;; Vai tro: Do luong 5 KPI cot loi, 8 chi so phu va xuat snapshot
-;; phuc vu Interface, BehaviorSpace va Decision Engine (T08).
-;; Tuan thu hop dong ky thuat: docs/dss-contract.md
-;; ============================================================
+;; T07 - Metrics & KPI reporters
 
-
-;; Dat lai 10 bien tich luy KPI cua luot chay hien tai ve 0.
-;; Khong xoa cac bien ket qua DSS (comparison-results, strategy-ranking...).
+;; Chi reset 10 bien tich luy cua luot chay, giu nguyen cac bien ket qua DSS.
 to reset-metrics
   set total-orders-created 0
   set total-orders-completed 0
@@ -21,24 +14,13 @@ to reset-metrics
   set total-reassigned-completed 0
 end
 
-
-;; Hook cap nhat chi so moi tick (buoc 7 trong chu ky go).
-;; Khong cong don trung lap total-wait-ticks hay total-broken-ticks
-;; vi module robot.nls da ghi nhan truc tiep tung tick.
+;; Khong cong trung total-wait-ticks va total-broken-ticks vi robot.nls da tang moi tick.
 to update-metrics
   if total-energy-consumed < 0 [ set total-energy-consumed 0 ]
   if total-wait-ticks < 0 [ set total-wait-ticks 0 ]
   if total-broken-ticks < 0 [ set total-broken-ticks 0 ]
 end
 
-
-;; ============================================================
-;; 5 KPI COT LOI CAP CHIEN LUOC
-;; ============================================================
-
-;; 1. Speed: Thoi gian hoan thanh don trung binh (ticks/don).
-;; Chieu tot: cang thap cang tot (min).
-;; Bien: chua co don hoan thanh -> tra ve sim-max-ticks (phat toi da).
 to-report kpi-avg-completion-time
   let done-orders orders with [
     order-status = "completed" and
@@ -50,11 +32,7 @@ to-report kpi-avg-completion-time
   report mean [max (list 0 (completed-tick - created-tick))] of done-orders
 end
 
-
-;; 2. On-time: Ty le don hoan thanh dung han (%, 0..100).
-;; Chieu tot: cang cao cang tot (max).
-;; Mau so gom ca don da hoan thanh lan don chua xong nhung da qua han
-;; de tranh hien tuong bo mac don ton dong nham lam dep chi so.
+;; Mau so tinh ca don chua xong nhung da qua han de tranh bo don ton lam dep chi so.
 to-report kpi-ontime-rate
   let due-or-done count orders with [
     order-status = "completed" or
@@ -71,11 +49,7 @@ to-report kpi-ontime-rate
   report min (list 100 (max (list 0 ((ontime-count / due-or-done) * 100))))
 end
 
-
-;; 3. Energy: Nang luong tieu thu trung binh moi don hoan thanh (dv pin/don).
-;; Chieu tot: cang thap cang tot (min).
-;; Bien: neu 0 don hoan thanh nhung con don ton chua giao -> phat 9999;
-;; neu chua co don nao phat sinh -> tra ve total-energy-consumed (0).
+;; Tra 9999 neu 0 don hoan thanh ma van con don ton chua giao.
 to-report kpi-energy-per-order
   if total-orders-completed > 0 [
     report max (list 0 (total-energy-consumed / total-orders-completed))
@@ -86,10 +60,6 @@ to-report kpi-energy-per-order
   report max (list 0 total-energy-consumed)
 end
 
-
-;; 4. Balance: Muc do can bang tai giua cac robot (chi so 0..1).
-;; Chieu tot: cang cao cang tot (max).
-;; Dung he so bien thien CV = stdev / mean tren orders-done cua doi robot.
 to-report kpi-load-balance
   if count robots <= 1 [
     report 1
@@ -103,11 +73,6 @@ to-report kpi-load-balance
   report max (list 0 (min (list 1 (1 - cv))))
 end
 
-
-;; 5. Resilience: Kha nang phuc hoi va chong chiu (chi so 0..1).
-;; Chieu tot: cang cao cang tot (max).
-;; Ket hop ty le hoan thanh don (completion-ratio) va ty le thoi gian
-;; khong bi cho/hong (uptime-ratio) de do nhat quan tren ca 4 kich ban.
 to-report kpi-resilience
   if ticks <= 0 or total-orders-created <= 0 [
     report 1
@@ -121,36 +86,22 @@ to-report kpi-resilience
   report (0.5 * completion-ratio) + (0.5 * uptime-ratio)
 end
 
-
-;; ============================================================
-;; 8 REPORTER PHU PHUC VU DASHBOARD, PLOT VA BEHAVIORSPEACE CSV
-;; ============================================================
-
-;; Tong so don hang da hoan thanh.
 to-report kpi-completed-orders
   report total-orders-completed
 end
 
-
-;; So don hang chua hoan thanh (dang cho, da gan hoac dang cho).
 to-report kpi-pending-orders
   report count orders with [order-status != "completed"]
 end
 
-
-;; Ty le don tre han (%, 0..100). Chieu tot: cang thap cang tot.
 to-report kpi-late-rate
   report 100 - kpi-ontime-rate
 end
 
-
-;; Tong nang luong toan doi robot da tieu thu (dv pin).
 to-report kpi-total-energy
   report max (list 0 total-energy-consumed)
 end
 
-
-;; Thoi gian cho trung binh moi robot (ticks/robot).
 to-report kpi-avg-wait-time
   if count robots <= 0 [
     report 0
@@ -158,8 +109,6 @@ to-report kpi-avg-wait-time
   report (max (list 0 total-wait-ticks)) / (count robots)
 end
 
-
-;; Tong so lan cac robot phai vao tram sac.
 to-report kpi-total-charges
   if not any? robots [
     report 0
@@ -167,15 +116,10 @@ to-report kpi-total-charges
   report sum [charge-count] of robots
 end
 
-
-;; Tong so tick bi ket cho do tac nghen.
 to-report kpi-congestion-events
   report max (list 0 total-wait-ticks)
 end
 
-
-;; Ty le hoan thanh cac don tung bi thu hoi do su co/het pin (%, 0..100).
-;; Bien: khi chua co don nao bi thu hoi -> tra ve 100.
 to-report kpi-recovery-rate
   if total-orders-reassigned <= 0 [
     report 100
@@ -183,13 +127,8 @@ to-report kpi-recovery-rate
   report min (list 100 (max (list 0 ((total-reassigned-completed / total-orders-reassigned) * 100))))
 end
 
-
-;; ============================================================
-;; SNAPSHOT BAN GIAO CHO DECISION ENGINE (T08)
-;; ============================================================
-
-;; Tra ve list 6 phan tu dung thu tu hop dong Muc 6:
-;; [ strategy-name raw-speed raw-ontime raw-energy raw-balance raw-resilience ]
+;; Tra ve list 6 phan tu dung thu tu hop dong cho T08:
+;; [active-strategy Speed On-time Energy Balance Resilience]
 to-report collect-current-kpi-snapshot
   report (list
     active-strategy
