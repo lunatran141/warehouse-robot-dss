@@ -9,4 +9,19 @@
       <metric>model-status</metric>
     </metrics>
   </experiment>
+  <experiment name="decision-engine-smoke" repetitions="1" sequentialRunOrder="true" version="NetLogo 7.0.4" runMetricsEveryStep="false">
+    <setup><![CDATA[set scenario-preset "Peak" set sim-seed 1 set management-goal "Balanced" run-comparison]]></setup>
+    <go></go>
+    <exitCondition><![CDATA[true]]></exitCondition>
+    <metrics>
+      <metric>length comparison-results</metric>
+      <metric>length normalized-results</metric>
+      <metric>length strategy-ranking</metric>
+      <metric>length decision-summary-data</metric>
+      <metric>recommended-strategy</metric>
+      <metric>is-comparing?</metric>
+      <metric>format-strategy-ranking</metric>
+      <metric>model-status</metric>
+    </metrics>
+  </experiment>
 </experiments>
