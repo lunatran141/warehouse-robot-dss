@@ -3,7 +3,7 @@
 - **Người thực hiện:** TV5 – Phạm Đăng Khôi
 - **Module:** `model/src/decision-engine.nls`
 - **Môi trường:** NetLogo 7.0.4 (Headless và Command Center ở chế độ `observer>`)
-- **Kết quả:** 13 nhóm kiểm thử (`TC01`–`TC13`, 19 lượt chạy) đạt kết quả mong đợi.
+- **Kết quả:** 13 nhóm kiểm thử (`TC01`–`TC13`, 20 lượt chạy) đạt kết quả mong đợi.
 
 ## 1. Bàn giao giao diện cho T09 (TV3) và T10 (TV1)
 
@@ -36,7 +36,7 @@
 
 ### Gợi ý gắn UI cho TV1 (T10)
 
-- Nút **Run Comparison** gọi `run-comparison`; `core.nls:setup` gọi thêm `apply-goal-weights`.
+- Nút **Run Comparison** gọi `run-comparison` (`core.nls:setup` và `setup-for-strategy` đã gọi sẵn `apply-goal-weights`).
 - Monitor: `recommended-strategy`, `format-strategy-ranking`, `recommendation-reason`, `trade-off-warning`.
 
 ## 2. Cách chạy kiểm thử
@@ -46,11 +46,15 @@
 
 ---
 
-## TC01 – Biên dịch & CI `smoke-test`
+## TC01 – Biên dịch & BehaviorSpace (`smoke-test`, `decision-engine-smoke`)
 
-**Mục đích:** Xác nhận 12 file `.nls` biên dịch sạch và chạy được `smoke-test` trong `experiments/experiments.xml`.
+**Mục đích:** Xác nhận 12 file `.nls` biên dịch sạch và chạy được cả `smoke-test` lẫn `decision-engine-smoke` trong `experiments/experiments.xml`.
 
-**Kết quả thực tế:** `ticks = 10`, `model-status = "Running"`, exit code `0`. **Đạt.**
+**Kết quả thực tế:**
+- `smoke-test`: `ticks = 10`, `model-status = "Running"`, exit code `0`.
+- `decision-engine-smoke`: `comparison-results = 3`, `normalized-results = 3`, `strategy-ranking = 3`, `decision-summary-data = 9`, `recommended-strategy = "Nearest"`, `is-comparing? = false`, `model-status = "Done"`, exit code `0`.
+
+**Kết quả:** **Đạt.**
 
 ---
 

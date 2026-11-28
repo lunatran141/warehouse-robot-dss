@@ -26,6 +26,7 @@ to setup
 
   ;; Áp dụng bộ tham số tương ứng với kịch bản người dùng đã chọn.
   apply-scenario-preset scenario-preset
+  apply-goal-weights
 
   ;; Khởi tạo bản đồ và đưa toàn bộ ô về trạng thái ban đầu.
   setup-environment
@@ -118,6 +119,7 @@ to setup-for-strategy [strat seed-val]
 
   ;; Áp dụng lại cùng kịch bản để các chiến lược được so sánh công bằng.
   apply-scenario-preset scenario-preset
+  apply-goal-weights
 
   ;; Đặt lại toàn bộ KPI của lượt chạy nhưng giữ kết quả DSS cũ.
   reset-metrics
