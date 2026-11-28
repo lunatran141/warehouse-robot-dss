@@ -483,13 +483,15 @@ to-report format-strategy-ranking
   report out
 end
 
-;; TODO (T09 - TV3): Thay than procedure nay bang phan sinh giai thich day du tu decision-summary-data.
+;; T09 - TV3: Chỉ diễn giải gói dữ liệu T08, không tính lại KPI hay xếp hạng.
 to generate-recommendation
-  if length decision-summary-data < 9 [
-    set recommendation-reason "Chua co du lieu so sanh de giai thich."
-    set trade-off-warning "Day la khuyen nghi tham khao; nguoi quan ly la nguoi dua ra quyet dinh cuoi cung."
-    stop
-  ]
+  let final-note "Đây là khuyến nghị tham khảo, người quản lý sẽ xem xét các đánh đổi trên để ra quyết định cuối cùng."
+  ;; Ghi đè đầu ra cũ kể cả khi dữ liệu mới chưa sẵn sàng.
+  set recommendation-reason "Chưa có dữ liệu so sánh hợp lệ để giải thích. Hãy chạy Run Comparison."
+  set trade-off-warning (word "Chưa đủ cơ sở để nêu đánh đổi định lượng. " final-note)
+
+  if not is-list? decision-summary-data [ stop ]
+  if length decision-summary-data != 9 [ stop ]
 
   let best-name item 0 decision-summary-data
   let best-score item 1 decision-summary-data
@@ -501,26 +503,103 @@ to generate-recommendation
   let diff-text item 7 decision-summary-data
   let trade-offs item 8 decision-summary-data
 
-  set recommendation-reason (word
-    "[Muc tieu: " management-goal " | Kich ban: " scenario-preset "] "
-    "De xuat tham khao: " best-name " (diem " best-score " vs " second-name " " second-score "). "
-    "Hai tieu chi dong gop lon nhat: " top1 " va " top2 " (" diff-text ")."
-  )
+  let kpi-names ["Speed" "On-time" "Energy" "Balance" "Resilience"]
+  let kpi-labels ["thời gian hoàn thành" "tỷ lệ đúng hạn" "năng lượng mỗi đơn" "cân bằng tải" "khả năng phục hồi"]
+  if not is-string? best-name [ stop ]
+  if best-name = "" [ stop ]
+  if not is-string? second-name [ stop ]
+  if not is-number? best-score [ stop ]
+  if not is-number? second-score [ stop ]
+  if not is-number? score-gap [ stop ]
+  if best-score < 0 or best-score > 1 or second-score < 0 or second-score > 1 or score-gap < 0 [ stop ]
+  if not member? top1 kpi-names or not member? top2 kpi-names [ stop ]
+  if top1 = top2 [ stop ]
+  if not is-string? diff-text [ stop ]
+  if not is-list? trade-offs [ stop ]
 
-  let warn-parts ""
-  if not empty? trade-offs [
-    let first-to first trade-offs
-    set warn-parts (word
-      "Danh doi chinh: kem hon " (item 1 first-to)
-      " o tieu chi " (item 0 first-to)
-      " (lech " (item 2 first-to) "). "
-    )
+  ;; Kiểm tra schema item 8 trước khi đọc để không gây lỗi runtime.
+  let valid-trades? true
+  foreach trade-offs [entry ->
+    ifelse not is-list? entry [
+      set valid-trades? false
+    ] [
+      ifelse length entry != 3 [
+        set valid-trades? false
+      ] [
+        if not member? (item 0 entry) kpi-names [ set valid-trades? false ]
+        ifelse not is-string? (item 1 entry) [
+          set valid-trades? false
+        ] [
+          if (item 1 entry) = "" or (item 1 entry) = best-name [ set valid-trades? false ]
+        ]
+        ifelse not is-number? (item 2 entry) [
+          set valid-trades? false
+        ] [
+          if (item 2 entry) <= 0 [ set valid-trades? false ]
+        ]
+      ]
+    ]
   ]
-  if score-gap < 0.05 [
-    set warn-parts (word warn-parts "Canh bao sat diem (chenh lech " score-gap " < 0.05). ")
+  if not valid-trades? [ stop ]
+
+  let context-text (word "Bối cảnh: " scenario-preset "; mục tiêu: " management-goal ". ")
+  if second-name = "" [
+    set recommendation-reason (word context-text "Chỉ có dữ liệu cho " best-name " (điểm " best-score "). Chưa đủ phương án để giải thích hai lý do định lượng so với hạng 2.")
+    set trade-off-warning (word "Chưa đủ dữ liệu để so sánh đánh đổi giữa các chiến lược; cần bổ sung các phương án còn lại. " final-note)
+    stop
   ]
-  set trade-off-warning (word
-    warn-parts
-    "Day la khuyen nghi tham khao; nguoi quan ly la nguoi dua ra quyet dinh cuoi cung."
-  )
+  if second-name = best-name or diff-text = "" [ stop ]
+
+  let label1 item (position top1 kpi-names) kpi-labels
+  let label2 item (position top2 kpi-names) kpi-labels
+  set recommendation-reason (word context-text
+    "Đề xuất tham khảo: " best-name " (điểm " best-score "), so với " second-name " (điểm " second-score "); chênh lệch điểm " score-gap ". "
+    "Hai tiêu chí đóng góp lớn nhất vào điểm tổng hợp là " top1 " (" label1 ") và " top2 " (" label2 "). "
+    "Đối chiếu định lượng với hạng 2: " diff-text ". "
+    "Hãy cân nhắc cả số liệu thực tế và các đánh đổi bên dưới trước khi lựa chọn.")
+  if top1 = "On-time" or top2 = "On-time" [
+    set recommendation-reason (word recommendation-reason " Chênh lệch On-time trong phần so sánh là điểm phần trăm.")
+  ]
+
+  let warning-text ""
+  ifelse empty? trade-offs [
+    set warning-text "Chưa ghi nhận KPI nào kém hơn các phương án còn lại trong gói dữ liệu hiện tại. "
+    if best-name = "Nearest" [
+      set warning-text (word warning-text "Đánh đổi vận hành định tính: cách chọn theo khoảng cách không trực tiếp tối ưu pin, tải và tắc nghẽn, cần theo dõi các yếu tố này khi bối cảnh đổi. ")
+    ]
+    if best-name = "Least workload" [
+      set warning-text (word warning-text "Đánh đổi vận hành định tính: ưu tiên cân bằng số đơn có thể chọn robot xa hơn, cần theo dõi quãng đường và năng lượng khi bối cảnh đổi. ")
+    ]
+    if best-name = "Multi-criteria" [
+      set warning-text (word warning-text "Đánh đổi vận hành định tính: cần cấu hình và duy trì trọng số, đồng thời tính nhiều tiêu chí hơn hai phương án cơ sở; đây không phải chi phí đã được đo bằng KPI hiện tại. ")
+    ]
+    if not member? best-name ["Nearest" "Least workload" "Multi-criteria"] [
+      set warning-text (word warning-text "Đánh đổi vận hành định tính: cần nguồn lực theo dõi và kiểm chứng lại khi bối cảnh hoặc trọng số thay đổi. ")
+    ]
+    set warning-text (word warning-text "Không suy rộng thành tối ưu cho mọi trường hợp. ")
+  ] [
+    set warning-text "Đánh đổi đo được: "
+    foreach trade-offs [entry ->
+      let key item 0 entry
+      let other-name item 1 entry
+      let delta item 2 entry
+      let kpi-label item (position key kpi-names) kpi-labels
+      let direction "thấp hơn"
+      let unit " điểm chỉ số (thang 0–1)"
+      if key = "Speed" [ set direction "cao hơn" set unit " tick/đơn" ]
+      if key = "Energy" [ set direction "cao hơn" set unit " đơn vị pin/đơn" ]
+      if key = "On-time" [ set unit " điểm phần trăm" ]
+      set warning-text (word warning-text best-name " có " kpi-label " " direction " " delta unit " so với " other-name "; đây là bất lợi. ")
+    ]
+  ]
+
+  ;; Dùng hiệu điểm đã đóng gói, không tự tính lại điểm của T08.
+  ifelse score-gap = 0 [
+    set warning-text (word warning-text "Cảnh báo sát điểm: hai phương án đồng điểm theo độ chính xác kết quả được cung cấp, thứ tự xếp hạng không chứng minh ưu thế rõ ràng. ")
+  ] [
+    if score-gap < 0.05 [
+      set warning-text (word warning-text "Cảnh báo sát điểm: chênh lệch " score-gap " < 0.05; ưu thế tổng hợp còn nhỏ, cần xem xét thêm trước khi lựa chọn. ")
+    ]
+  ]
+  set trade-off-warning (word warning-text final-note)
 end
